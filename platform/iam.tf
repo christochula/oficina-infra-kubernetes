@@ -1,6 +1,6 @@
 module "load_balancer_controller_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "6.8.0"
+  version = "6.8.1"
 
   name                                   = "${local.name}-aws-lbc"
   attach_load_balancer_controller_policy = true
@@ -16,7 +16,7 @@ module "load_balancer_controller_irsa" {
 
 module "cluster_autoscaler_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "6.8.0"
+  version = "6.8.1"
 
   name                             = "${local.name}-cluster-autoscaler"
   attach_cluster_autoscaler_policy = true
@@ -33,7 +33,7 @@ module "cluster_autoscaler_irsa" {
 
 module "external_secrets_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "6.8.0"
+  version = "6.8.1"
 
   name                                  = "${local.name}-external-secrets"
   attach_external_secrets_policy        = true
@@ -51,7 +51,7 @@ module "external_secrets_irsa" {
 
 module "ebs_csi_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "6.8.0"
+  version = "6.8.1"
 
   name                  = "${local.name}-ebs-csi"
   attach_ebs_csi_policy = true
@@ -67,7 +67,7 @@ module "ebs_csi_irsa" {
 
 module "application_notifications_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "6.8.0"
+  version = "6.8.1"
 
   name        = "${local.name}-oficina-api-notifications"
   description = "Allows only the oficina-api ServiceAccount to publish notification events to its SQS queue."
