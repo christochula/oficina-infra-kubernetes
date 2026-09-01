@@ -130,6 +130,6 @@ output "private_integration_contract" {
     alb_security_group_id             = aws_security_group.internal_alb.id
     workload_client_security_group_id = aws_security_group.workload_client.id
     vpc_link_security_group_id        = aws_security_group.vpc_link.id
-    lambda_client_security_group_id    = aws_security_group.lambda_client.id
+    lambda_client_security_group_id   = aws_security_group.lambda_client.id
   }
 }
