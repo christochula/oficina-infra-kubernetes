@@ -1,0 +1,18 @@
+environment             = "homolog"
+service_name            = "oficina-api"
+kubernetes_cluster_name = "oficina-homolog-eks"
+kubernetes_namespace    = "oficina"
+
+api_base_url         = "http://internal-oficina-homolog-api.example.internal"
+synthetics_locations = ["pl:replace-with-private-location-id"]
+datadog_api_url      = "https://api.datadoghq.com/"
+
+enable_aws_integration          = false
+manage_metric_tag_configuration = false
+
+api_latency_warning_ms       = 750
+api_latency_critical_ms      = 1000
+cpu_warning_cores            = 0.7
+cpu_critical_cores           = 0.9
+memory_warning_percent       = 80
+memory_critical_percent      = 90

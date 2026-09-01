@@ -1,0 +1,124 @@
+name: Terraform deploy
+
+on:
+  push:
+    branches: [homolog, main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply ${{ github.ref_name }}
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'homolog' }}
+    runs-on: ${{ vars.TF_RUNNER || 'ubuntu-latest' }}
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_AWS_STATE_KEY: ${{ vars.TF_AWS_STATE_KEY }}
+      TF_PLATFORM_STATE_KEY: ${{ vars.TF_PLATFORM_STATE_KEY }}
+      TF_OBSERVABILITY_STATE_KEY: ${{ vars.TF_OBSERVABILITY_STATE_KEY }}
+      TF_VAR_environment: ${{ github.ref_name == 'main' && 'production' || 'homolog' }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_vpc_cidr: ${{ vars.VPC_CIDR }}
+      TF_VAR_az_count: ${{ github.ref_name == 'main' && '3' || '2' }}
+      TF_VAR_nat_gateway_mode: ${{ github.ref_name == 'main' && 'per_az' || 'single' }}
+      TF_VAR_cluster_endpoint_public_access: ${{ vars.CLUSTER_ENDPOINT_PUBLIC_ACCESS || 'false' }}
+      TF_VAR_cluster_endpoint_public_access_cidrs: ${{ vars.CLUSTER_ENDPOINT_PUBLIC_ACCESS_CIDRS_JSON || '[]' }}
+      TF_VAR_managed_node_groups: ${{ vars.MANAGED_NODE_GROUPS_JSON }}
+      TF_VAR_alb_deletion_protection: ${{ github.ref_name == 'main' && 'true' || 'false' }}
+      TF_VAR_cluster_deletion_protection: ${{ github.ref_name == 'main' && 'true' || 'false' }}
+      TF_VAR_ecr_image_tag_mutability: ${{ github.ref_name == 'main' && 'IMMUTABLE' || 'MUTABLE' }}
+      TF_VAR_aws_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_aws_state_key: ${{ vars.TF_AWS_STATE_KEY }}
+      TF_VAR_aws_state_region: ${{ vars.TF_STATE_REGION }}
+      TF_VAR_database_secret_arn: ${{ vars.DATABASE_SECRET_ARN }}
+      TF_VAR_jwt_secret_arn: ${{ vars.JWT_SECRET_ARN }}
+      TF_VAR_datadog_secret_arn: ${{ vars.DATADOG_SECRET_ARN }}
+      TF_VAR_notification_queue_arn: ${{ vars.NOTIFICATION_QUEUE_ARN }}
+      TF_VAR_external_secrets_kms_key_arns: ${{ vars.EXTERNAL_SECRETS_KMS_KEY_ARNS_JSON || '[]' }}
+      TF_VAR_datadog_site: ${{ vars.DATADOG_SITE || 'datadoghq.com' }}
+      TF_VAR_enable_aws_integration: ${{ vars.ENABLE_AWS_INTEGRATION || 'false' }}
+      TF_VAR_aws_integration_role_name: ${{ vars.AWS_INTEGRATION_ROLE_NAME || 'DatadogIntegrationRole' }}
+      TF_VAR_aws_integration_namespaces: ${{ vars.AWS_INTEGRATION_NAMESPACES_JSON || '["AWS/ApiGateway","AWS/Lambda","AWS/RDS"]' }}
+      TF_VAR_manage_metric_tag_configuration: ${{ vars.MANAGE_DATADOG_METRIC_TAGS || 'false' }}
+      TF_VAR_kubernetes_cluster_name: ${{ vars.KUBERNETES_CLUSTER_NAME }}
+      TF_VAR_api_base_url: ${{ vars.API_BASE_URL }}
+      TF_VAR_synthetics_locations: ${{ vars.SYNTHETICS_LOCATIONS_JSON }}
+      TF_VAR_datadog_api_url: ${{ vars.DATADOG_API_URL || 'https://api.datadoghq.com/' }}
+      DD_SECRET_ARN: ${{ vars.DATADOG_SECRET_ARN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: github-apply-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.0
+
+      - name: Apply AWS foundation
+        working-directory: aws
+        shell: bash
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=${TF_AWS_STATE_KEY}" \
+            -backend-config="region=${TF_STATE_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform apply -input=false -lock-timeout=5m -auto-approve
+
+      - name: Apply platform controllers
+        if: vars.ENABLE_PLATFORM == 'true'
+        working-directory: platform
+        shell: bash
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=${TF_PLATFORM_STATE_KEY}" \
+            -backend-config="region=${TF_STATE_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform apply -input=false -lock-timeout=5m -auto-approve
+
+      - name: Load Datadog provider credentials from Secrets Manager
+        if: vars.ENABLE_OBSERVABILITY == 'true'
+        shell: bash
+        run: |
+          secret_json="$(aws secretsmanager get-secret-value --secret-id "${DD_SECRET_ARN}" --query SecretString --output text)"
+          dd_api_key="$(jq -er '.api_key' <<<"${secret_json}")"
+          dd_app_key="$(jq -er '.app_key' <<<"${secret_json}")"
+          echo "::add-mask::${dd_api_key}"
+          echo "::add-mask::${dd_app_key}"
+          echo "DD_API_KEY=${dd_api_key}" >> "${GITHUB_ENV}"
+          echo "DD_APP_KEY=${dd_app_key}" >> "${GITHUB_ENV}"
+
+      - name: Apply Datadog resources
+        if: vars.ENABLE_OBSERVABILITY == 'true'
+        working-directory: observability
+        shell: bash
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=${TF_OBSERVABILITY_STATE_KEY}" \
+            -backend-config="region=${TF_STATE_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform apply -input=false -lock-timeout=5m -auto-approve

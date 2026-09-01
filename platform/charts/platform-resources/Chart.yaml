@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oficina-platform-resources
+description: External Secrets contracts and DatadogAgent for Oficina
+type: application
+version: 0.1.0
+appVersion: "1.0"

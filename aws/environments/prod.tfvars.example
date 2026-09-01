@@ -1,0 +1,30 @@
+environment      = "production"
+aws_region       = "us-east-1"
+vpc_cidr         = "10.30.0.0/16"
+az_count         = 3
+nat_gateway_mode = "per_az"
+
+kubernetes_version = "1.35"
+
+# Production expects a self-hosted GitHub Actions runner with VPC connectivity.
+cluster_endpoint_public_access       = false
+cluster_endpoint_public_access_cidrs = []
+
+alb_deletion_protection     = true
+# ACM certificate for the private DNS name used by API Gateway TLS verification.
+alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/REPLACE"
+
+cluster_deletion_protection = true
+ecr_image_tag_mutability    = "IMMUTABLE"
+
+managed_node_groups = {
+  general = {
+    instance_types = ["m7i.large", "m7a.large"]
+    capacity_type  = "ON_DEMAND"
+    min_size       = 3
+    max_size       = 12
+    desired_size   = 3
+    disk_size      = 80
+    labels         = { workload = "general" }
+  }
+}

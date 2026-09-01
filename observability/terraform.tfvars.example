@@ -1,0 +1,17 @@
+environment             = "homolog"
+service_name            = "oficina-api"
+kubernetes_cluster_name = "oficina-homolog-eks"
+kubernetes_namespace    = "oficina"
+
+# The internal ALB requires a Datadog Private Location with VPC reachability.
+api_base_url         = "http://internal-oficina-homolog-api.example.internal"
+synthetics_locations = ["pl:replace-with-private-location-id"]
+
+datadog_api_url = "https://api.datadoghq.com/"
+
+# Account/org-global resources: enable each one in exactly one authoritative state.
+enable_aws_integration          = false
+manage_metric_tag_configuration = false
+
+# DD_API_KEY and DD_APP_KEY must be environment variables, never tfvars.
+notification_message = "Investigue o dashboard e acione @slack-oficina-alertas."

@@ -1,0 +1,18 @@
+environment      = "homolog"
+aws_region       = "us-east-1"
+aws_state_bucket = "replace-with-terraform-state-bucket"
+aws_state_key    = "oficina/homolog/aws.tfstate"
+aws_state_region = "us-east-1"
+
+database_secret_arn    = "arn:aws:secretsmanager:us-east-1:123456789012:secret:oficina/homolog/database-AbCdEf"
+jwt_secret_arn         = "arn:aws:secretsmanager:us-east-1:123456789012:secret:oficina/homolog/jwt-GhIjKl"
+datadog_secret_arn     = "arn:aws:secretsmanager:us-east-1:123456789012:secret:oficina/homolog/datadog-MnOpQr"
+notification_queue_arn = "arn:aws:sqs:us-east-1:123456789012:oficina-homolog-notifications-queue"
+
+external_secrets_kms_key_arns = [
+  "arn:aws:kms:us-east-1:123456789012:key/replace-with-secrets-key-id",
+]
+
+kubernetes_version           = "1.35"
+cluster_autoscaler_image_tag = "v1.35.0"
+datadog_site                 = "datadoghq.com"

@@ -1,0 +1,25 @@
+# Terraform working directories and local state
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Local backend/variable material (examples remain versioned)
+**/backend.hcl
+**/terraform.tfvars
+**/*.auto.tfvars
+!**/*.tfvars.example
+!**/*.auto.tfvars.example
+
+# Credentials and local tooling
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

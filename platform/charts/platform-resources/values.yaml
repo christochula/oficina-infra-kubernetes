@@ -1,0 +1,18 @@
+environment: homolog
+awsRegion: us-east-1
+
+externalSecrets:
+  namespace: external-secrets
+  serviceAccountName: external-secrets
+  refreshInterval: 1h
+  datadogSecretArn: ""
+  datadogNamespace: datadog
+  datadogSecretName: datadog-secret
+
+datadog:
+  site: datadoghq.com
+  namespace: datadog
+  secretName: datadog-secret
+  clusterName: oficina-homolog-eks
+  collectAllContainerLogs: true
+  tolerateAllNodes: true

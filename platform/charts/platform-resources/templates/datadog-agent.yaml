@@ -1,0 +1,64 @@
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: oficina
+  namespace: {{ .Values.datadog.namespace | quote }}
+  labels:
+    app.kubernetes.io/part-of: oficina
+spec:
+  global:
+    clusterName: {{ .Values.datadog.clusterName | quote }}
+    site: {{ .Values.datadog.site | quote }}
+    credentials:
+      apiSecret:
+        secretName: {{ .Values.datadog.secretName | quote }}
+        keyName: api-key
+      appSecret:
+        secretName: {{ .Values.datadog.secretName | quote }}
+        keyName: app-key
+    tags:
+      - {{ printf "env:%s" .Values.environment | quote }}
+      - "team:oficina"
+  features:
+    logCollection:
+      enabled: true
+      containerCollectAll: {{ .Values.datadog.collectAllContainerLogs }}
+    liveProcessCollection:
+      enabled: true
+    liveContainerCollection:
+      enabled: true
+    processDiscovery:
+      enabled: true
+    orchestratorExplorer:
+      enabled: true
+    kubeStateMetricsCore:
+      enabled: true
+    eventCollection:
+      collectKubernetesEvents: true
+    apm:
+      enabled: true
+      unixDomainSocketConfig:
+        enabled: true
+      hostPortConfig:
+        enabled: true
+    dogstatsd:
+      unixDomainSocketConfig:
+        enabled: true
+      hostPortConfig:
+        enabled: true
+    admissionController:
+      enabled: true
+      mutateUnlabelled: false
+      # The API's hot-shots client sends UDP to DD_AGENT_HOST:8125. Host-IP
+      # injection therefore matches the runtime transport; UDS remains enabled
+      # for workloads that explicitly select the socket.
+      agentCommunicationMode: hostip
+  override:
+    nodeAgent:
+      {{- if .Values.datadog.tolerateAllNodes }}
+      tolerations:
+        - operator: Exists
+      {{- end }}
+      env:
+        - name: DD_LOGS_CONFIG_AUTO_MULTI_LINE_DETECTION
+          value: "true"

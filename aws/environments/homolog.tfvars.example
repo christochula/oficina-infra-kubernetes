@@ -1,0 +1,28 @@
+environment      = "homolog"
+aws_region       = "us-east-1"
+vpc_cidr         = "10.20.0.0/16"
+az_count         = 2
+nat_gateway_mode = "single"
+
+kubernetes_version = "1.35"
+
+# Use a self-hosted runner inside the VPC where possible. Otherwise restrict this
+# list to the egress CIDR of the CI runner; never use 0.0.0.0/0 in a real account.
+cluster_endpoint_public_access       = true
+cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
+
+alb_deletion_protection     = false
+cluster_deletion_protection = false
+ecr_image_tag_mutability    = "MUTABLE"
+
+managed_node_groups = {
+  general = {
+    instance_types = ["m7i.large"]
+    capacity_type  = "SPOT"
+    min_size       = 1
+    max_size       = 4
+    desired_size   = 2
+    disk_size      = 50
+    labels         = { workload = "general" }
+  }
+}

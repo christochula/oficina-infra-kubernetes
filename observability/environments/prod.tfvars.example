@@ -1,0 +1,22 @@
+environment             = "production"
+service_name            = "oficina-api"
+kubernetes_cluster_name = "oficina-production-eks"
+kubernetes_namespace    = "oficina"
+
+api_base_url         = "https://api.oficina.example.com"
+synthetics_locations = ["pl:replace-with-private-location-id"]
+datadog_api_url      = "https://api.datadoghq.com/"
+
+# Enable the AWS integration in only one state per AWS account.
+enable_aws_integration = true
+
+# Phase 1 stays false. Enable only after all five custom metrics exist in Datadog.
+manage_metric_tag_configuration = false
+
+api_latency_warning_ms       = 500
+api_latency_critical_ms      = 800
+cpu_warning_cores            = 0.7
+cpu_critical_cores           = 0.9
+memory_warning_percent       = 75
+memory_critical_percent      = 85
+renotify_interval_minutes    = 30

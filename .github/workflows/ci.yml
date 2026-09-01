@@ -1,0 +1,68 @@
+name: Terraform quality
+
+on:
+  pull_request:
+    branches: [main, homolog]
+  push:
+    branches-ignore: [main, homolog]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform:
+    name: Validate ${{ matrix.stack }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [aws, platform, observability]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.0
+
+      - name: Check formatting
+        run: terraform -chdir=${{ matrix.stack }} fmt -check -recursive
+
+      - name: Initialize without backend
+        run: terraform -chdir=${{ matrix.stack }} init -backend=false -input=false
+
+      - name: Validate configuration
+        run: terraform -chdir=${{ matrix.stack }} validate
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+          cache: true
+
+      - name: Initialize TFLint
+        run: tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Run TFLint
+        run: tflint --chdir=${{ matrix.stack }} --config="${GITHUB_WORKSPACE}/.tflint.hcl" --format=compact
+
+  checkov:
+    name: Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Scan Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          config_file: .checkov.yml

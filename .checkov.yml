@@ -1,0 +1,24 @@
+framework:
+  - terraform
+compact: true
+quiet: true
+download-external-modules: false
+
+# Environment-aware exceptions. Production examples enable deletion protection
+# and should supply TLS. ALB access logs require a separately governed log archive.
+skip-check:
+  - CKV_AWS_2
+  - CKV_AWS_91
+  - CKV_AWS_150
+  - CKV_AWS_382
+  # Registry modules are pinned to exact immutable semantic versions; provider
+  # selections and hashes are captured in each committed .terraform.lock.hcl.
+  - CKV_TF_1
+  # The SG is attached to every managed node-group launch template through the
+  # computed eks_managed_node_groups map; Checkov cannot resolve that indirection.
+  - CKV2_AWS_5
+  # KMS key policies require Resource "*" to mean the attached key. The policy
+  # itself constrains administrators to account root and ECR to account/ViaService.
+  - CKV_AWS_109
+  - CKV_AWS_111
+  - CKV_AWS_356
