@@ -169,6 +169,17 @@ resource "datadog_dashboard_json" "oficina" {
             display_type = "line"
           }]
         }
+      },
+      {
+        definition = {
+          title       = "Falhas no processamento de OS"
+          type        = "timeseries"
+          show_legend = true
+          requests = [{
+            q            = "sum:${var.service_order_processing_errors_metric}{env:$env,service:$service} by {operation}.as_count()"
+            display_type = "bars"
+          }]
+        }
       }
     ]
   })

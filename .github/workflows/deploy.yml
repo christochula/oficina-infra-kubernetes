@@ -104,4 +104,6 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
           terraform apply -input=false -lock-timeout=5m -auto-approve \
-            -var "kubernetes_cluster_name=${CLUSTER}"
+            -var "kubernetes_cluster_name=${CLUSTER}" \
+            -var "api_base_url=${{ vars.API_BASE_URL || 'http://api.placeholder.local' }}" \
+            -var "datadog_api_url=${{ vars.DATADOG_API_URL || 'https://api.datadoghq.com/' }}"

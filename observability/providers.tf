@@ -1,20 +1,6 @@
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Project     = "oficina"
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      Repository  = "oficina-infra-kubernetes"
-      Stack       = "observability"
-    }
-  }
-}
-
 provider "datadog" {
   api_url = var.datadog_api_url
 
-  # Authentication is read from DD_API_KEY and DD_APP_KEY. Do not put keys in
-  # tfvars, provider configuration or Terraform state.
+  # Autenticacao vem de DD_API_KEY e DD_APP_KEY (env do pipeline, lidas do
+  # AWS Secrets Manager). Nunca em tfvars, provider config ou state.
 }

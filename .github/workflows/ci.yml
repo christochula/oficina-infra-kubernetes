@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stack: [aws]
+        stack: [aws, observability]
 
     steps:
       - name: Checkout
