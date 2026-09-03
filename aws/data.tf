@@ -1,61 +1,31 @@
-data "aws_availability_zones" "available" {
-  state = "available"
-
-  filter {
-    name   = "opt-in-status"
-    values = ["opt-in-not-required"]
-  }
-}
-
 data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
 
-# checkov:skip=CKV_AWS_109:The administrative statement is limited to this account root in a KMS key policy.
-# checkov:skip=CKV_AWS_111:ECR write cryptographic actions are constrained by caller account and ViaService.
-# checkov:skip=CKV_AWS_356:In an attached KMS key policy Resource * means only the key carrying this policy.
-data "aws_iam_policy_document" "ecr_kms" {
-  statement {
-    sid    = "EnableAccountAdministration"
-    effect = "Allow"
+# --- Rede: usa a VPC default do AWS Academy -----------------------------------
+# O Learner Lab nao permite criar VPC Flow Log role; criar NAT tem custo alto.
+# A VPC default ja tem Internet Gateway e uma subnet publica por AZ.
 
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
-    }
+data "aws_vpc" "default" {
+  default = true
+}
 
-    actions   = ["kms:*"]
-    resources = ["*"]
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
   }
+}
 
-  statement {
-    sid    = "AllowECRUseWithinAccount"
-    effect = "Allow"
+# EKS nao suporta a AZ us-east-1e. Filtra qualquer subnet nela.
+data "aws_subnet" "each" {
+  for_each = toset(data.aws_subnets.default.ids)
+  id       = each.value
+}
 
-    principals {
-      type        = "Service"
-      identifiers = ["ecr.amazonaws.com"]
-    }
-
-    actions = [
-      "kms:Decrypt",
-      "kms:DescribeKey",
-      "kms:Encrypt",
-      "kms:GenerateDataKey*",
-      "kms:ReEncrypt*",
-    ]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "kms:CallerAccount"
-      values   = [data.aws_caller_identity.current.account_id]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "kms:ViaService"
-      values   = ["ecr.${var.aws_region}.${data.aws_partition.current.dns_suffix}"]
-    }
-  }
+locals {
+  eks_subnet_ids = [
+    for s in data.aws_subnet.each : s.id
+    if s.availability_zone != "${var.aws_region}e"
+  ]
 }

@@ -1,18 +1,5 @@
-resource "aws_kms_key" "ecr" {
-  description             = "KMS key for ${local.name} application container images"
-  enable_key_rotation     = true
-  deletion_window_in_days = 30
-  policy                  = data.aws_iam_policy_document.ecr_kms.json
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name}-ecr"
-  })
-}
-
-resource "aws_kms_alias" "ecr" {
-  name          = "alias/${local.name}-ecr"
-  target_key_id = aws_kms_key.ecr.key_id
-}
+# ECR com criptografia AES256 gerenciada pela AWS (sem CMK: CreateKey/PutKeyPolicy
+# nao sao confiaveis no AWS Academy).
 
 resource "aws_ecr_repository" "application" {
   name                 = "${local.name}-api"
@@ -20,13 +7,14 @@ resource "aws_ecr_repository" "application" {
   force_delete         = var.ecr_force_delete
 
   encryption_configuration {
-    encryption_type = "KMS"
-    kms_key         = aws_kms_key.ecr.arn
+    encryption_type = "AES256"
   }
 
   image_scanning_configuration {
     scan_on_push = true
   }
+
+  tags = local.common_tags
 }
 
 resource "aws_ecr_lifecycle_policy" "application" {
@@ -36,16 +24,14 @@ resource "aws_ecr_lifecycle_policy" "application" {
     rules = [
       {
         rulePriority = 1
-        description  = "Expire untagged images after the configured retention period"
+        description  = "Expira imagens sem tag apos o periodo configurado"
         selection = {
           tagStatus   = "untagged"
           countType   = "sinceImagePushed"
           countUnit   = "days"
           countNumber = var.ecr_untagged_retention_days
         }
-        action = {
-          type = "expire"
-        }
+        action = { type = "expire" }
       }
     ]
   })
