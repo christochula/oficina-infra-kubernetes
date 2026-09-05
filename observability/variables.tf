@@ -11,9 +11,9 @@ variable "service_name" {
 }
 
 variable "manage_metric_tag_configuration" {
-  description = "Gerencia a config global de tags das metricas (necessario para percentis p95/p99 nas distributions). OK numa conta Datadog dedicada."
+  description = "Config global de tags das metricas. So funciona DEPOIS que as metricas existem (com trafego). Ligar numa 2a passada."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "kubernetes_cluster_name" {
