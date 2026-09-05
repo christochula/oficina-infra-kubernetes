@@ -3,7 +3,7 @@ resource "datadog_dashboard_json" "oficina" {
     title       = "Oficina | Operação e Observabilidade | ${var.environment}"
     description = "Dashboard Terraform para volume de OS, duração por status, integrações, latência da API e capacidade Kubernetes."
     layout_type = "ordered"
-    reflow_type = "fixed"
+    reflow_type = "auto"
     tags        = local.common_tags
     template_variables = [
       {
