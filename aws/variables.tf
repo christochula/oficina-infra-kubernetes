@@ -1,208 +1,156 @@
 variable "project_name" {
-  description = "Short project identifier used in resource names."
+  description = "Prefixo curto para nomes de recursos."
   type        = string
   default     = "oficina"
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{1,20}$", var.project_name))
-    error_message = "project_name must be 2-21 lowercase letters, numbers or hyphens."
+    error_message = "project_name deve ter 2-21 caracteres minusculos, numeros ou hifens."
   }
 }
 
 variable "environment" {
-  description = "Canonical deployment environment: dev, homolog or production."
+  description = "Ambiente: dev, homolog ou production."
   type        = string
+  default     = "homolog"
 
   validation {
     condition     = contains(["dev", "homolog", "production"], var.environment)
-    error_message = "environment must be dev, homolog or production."
+    error_message = "environment deve ser dev, homolog ou production."
   }
 }
 
 variable "aws_region" {
-  description = "AWS region in which the platform is created."
+  description = "Regiao AWS."
   type        = string
   default     = "us-east-1"
 }
 
-variable "vpc_cidr" {
-  description = "IPv4 CIDR for the VPC."
+# --- AWS Academy ---------------------------------------------------------------
+# O Learner Lab nao permite criar IAM role/policy/OIDC. Toda role necessaria
+# (EKS cluster, node group, add-ons) usa a LabRole pre-existente, e o acesso
+# administrativo ao cluster vai para a role voclabs do usuario do lab.
+
+variable "lab_role_arn" {
+  description = "ARN da LabRole do AWS Academy usada como role do cluster e dos nodes. Vazio = deriva de account_id."
   type        = string
-  default     = "10.20.0.0/16"
-
-  validation {
-    condition     = can(cidrhost(var.vpc_cidr, 0))
-    error_message = "vpc_cidr must be a valid IPv4 CIDR."
-  }
+  default     = ""
 }
 
-variable "az_count" {
-  description = "Number of Availability Zones when availability_zones is empty."
-  type        = number
-  default     = 2
-
-  validation {
-    condition     = var.az_count >= 2 && var.az_count <= 3
-    error_message = "az_count must be 2 or 3."
-  }
-}
-
-variable "availability_zones" {
-  description = "Optional explicit Availability Zones. Leave empty for automatic selection."
-  type        = list(string)
-  default     = []
-}
-
-variable "private_subnet_cidrs" {
-  description = "Optional private subnet CIDRs. Must have one entry per selected AZ."
-  type        = list(string)
-  default     = []
-}
-
-variable "public_subnet_cidrs" {
-  description = "Optional public subnet CIDRs. Must have one entry per selected AZ."
-  type        = list(string)
-  default     = []
-}
-
-variable "nat_gateway_mode" {
-  description = "NAT topology: none, single (cost optimized) or per_az (resilient)."
+variable "principal_arn" {
+  description = "ARN da role principal (voclabs) que recebe acesso cluster-admin via EKS access entry. Vazio = deriva de account_id."
   type        = string
-  default     = "single"
-
-  validation {
-    condition     = contains(["none", "single", "per_az"], var.nat_gateway_mode)
-    error_message = "nat_gateway_mode must be none, single or per_az."
-  }
+  default     = ""
 }
 
 variable "kubernetes_version" {
-  description = "EKS Kubernetes minor. Keep aligned with the Cluster Autoscaler version in the platform stack."
+  description = "Minor do EKS."
   type        = string
-  default     = "1.35"
+  default     = "1.32"
 
   validation {
     condition     = can(regex("^1\\.[0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version must be a minor such as 1.35."
+    error_message = "kubernetes_version deve ser um minor como 1.32."
   }
 }
 
-variable "cluster_endpoint_public_access" {
-  description = "Expose the EKS API publicly. Prefer false with a private/self-hosted CI runner."
-  type        = bool
-  default     = false
-}
-
-variable "cluster_endpoint_public_access_cidrs" {
-  description = "CIDRs allowed to reach the public EKS API when enabled."
-  type        = list(string)
-  default     = []
-}
-
-variable "enable_cluster_creator_admin_permissions" {
-  description = "Grant the Terraform caller temporary cluster-admin access via an EKS access entry."
-  type        = bool
-  default     = true
-}
-
-variable "cluster_admin_role_arns" {
-  description = "IAM role ARNs that receive the AmazonEKSClusterAdminPolicy access policy."
-  type        = list(string)
-  default     = []
-}
-
-variable "managed_node_groups" {
-  description = "Managed node group definitions. min/max/desired sizes drive Cluster Autoscaler boundaries."
-  type        = map(any)
-  default = {
-    general = {
-      instance_types = ["m7i.large"]
-      capacity_type  = "ON_DEMAND"
-      min_size       = 2
-      max_size       = 6
-      desired_size   = 2
-      disk_size      = 50
-      labels = {
-        workload = "general"
-      }
-    }
-  }
-}
-
-variable "ecr_image_tag_mutability" {
-  description = "ECR tag mutability. IMMUTABLE is recommended outside development."
+variable "instance_type" {
+  description = "Tipo de instancia dos nodes do EKS."
   type        = string
-  default     = "IMMUTABLE"
-
-  validation {
-    condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
-    error_message = "ecr_image_tag_mutability must be MUTABLE or IMMUTABLE."
-  }
+  default     = "t3.medium"
 }
 
-variable "ecr_force_delete" {
-  description = "Allow deletion of a non-empty ECR repository. Keep false in production."
-  type        = bool
-  default     = false
-}
-
-variable "ecr_untagged_retention_days" {
-  description = "Days before untagged ECR images expire."
+variable "node_min_size" {
+  description = "Minimo de nodes."
   type        = number
-  default     = 14
+  default     = 2
+}
+
+variable "node_desired_size" {
+  description = "Quantidade desejada de nodes."
+  type        = number
+  default     = 2
+}
+
+variable "node_max_size" {
+  description = "Maximo de nodes (limite para o HPA/escala)."
+  type        = number
+  default     = 4
+}
+
+variable "node_disk_size" {
+  description = "Disco (GiB) por node."
+  type        = number
+  default     = 50
 }
 
 variable "application_port" {
-  description = "API container and target group port."
+  description = "Porta do container da API e do Service."
   type        = number
   default     = 3000
 }
 
-variable "health_check_path" {
-  description = "Readiness path used by the internal ALB target group."
+variable "ecr_image_tag_mutability" {
+  description = "Mutabilidade das tags do ECR."
   type        = string
-  default     = "/api/health/ready"
+  default     = "MUTABLE"
+
+  validation {
+    condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
+    error_message = "ecr_image_tag_mutability deve ser MUTABLE ou IMMUTABLE."
+  }
 }
 
-variable "alb_ingress_cidrs" {
-  description = "Optional break-glass CIDRs for the internal ALB. Empty permits only the dedicated VPC Link SG."
-  type        = list(string)
-  default     = []
-}
-
-variable "alb_certificate_arn" {
-  description = "Optional ACM certificate ARN. When set, the listener uses HTTPS; otherwise HTTP."
-  type        = string
-  default     = null
-  nullable    = true
-}
-
-variable "alb_ssl_policy" {
-  description = "TLS policy for the HTTPS listener."
-  type        = string
-  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-}
-
-variable "alb_deletion_protection" {
-  description = "Protect the internal ALB from accidental deletion."
+variable "ecr_force_delete" {
+  description = "Permite apagar repositorio ECR nao vazio (util para destroy no lab)."
   type        = bool
-  default     = false
+  default     = true
 }
 
-variable "cluster_deletion_protection" {
-  description = "Protect the EKS cluster from accidental deletion."
-  type        = bool
-  default     = false
-}
-
-variable "cloudwatch_log_retention_days" {
-  description = "Retention for EKS control-plane and VPC flow logs."
+variable "ecr_untagged_retention_days" {
+  description = "Dias ate imagens sem tag expirarem no ECR."
   type        = number
-  default     = 30
+  default     = 7
+}
+
+# --- Datadog Agent (Helm) ----------------------------------------------------
+# Chaves lidas do AWS Secrets Manager pelo pipeline e passadas como TF_VAR_*.
+# Nunca vao para tfvars nem para o state em texto plano (marcadas sensitive).
+
+variable "datadog_enabled" {
+  description = "Instala o Datadog Agent via Helm no cluster."
+  type        = bool
+  default     = true
+}
+
+variable "datadog_api_key" {
+  description = "Datadog API key (ingestao). Vem do Secrets Manager em runtime."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "datadog_app_key" {
+  description = "Datadog APP key. Vem do Secrets Manager em runtime."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "datadog_site" {
+  description = "Site Datadog, ex: datadoghq.com."
+  type        = string
+  default     = "datadoghq.com"
+}
+
+variable "metrics_server_enabled" {
+  description = "Instala o metrics-server (necessario para HPA)."
+  type        = bool
+  default     = true
 }
 
 variable "tags" {
-  description = "Additional tags applied to all supported AWS resources."
+  description = "Tags adicionais aplicadas aos recursos AWS."
   type        = map(string)
   default     = {}
 }

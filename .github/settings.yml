@@ -1,8 +1,8 @@
+# Intencao de configuracao. Aplicar via docs de governanca ou Settings App.
 repository:
   name: oficina-infra-kubernetes
-  description: Terraform AWS/EKS, platform controllers and Datadog observability for Oficina
-  homepage: ""
-  topics: terraform, aws, eks, kubernetes, datadog, external-secrets, fiap
+  description: Terraform AWS/EKS e observabilidade Datadog para Oficina (AWS Academy)
+  topics: terraform, aws, eks, kubernetes, datadog, fiap
   private: false
   has_issues: true
   has_projects: false
@@ -12,7 +12,6 @@ repository:
   allow_squash_merge: true
   allow_merge_commit: false
   allow_rebase_merge: true
-  allow_auto_merge: true
   delete_branch_on_merge: true
   enable_vulnerability_alerts: true
   enable_automated_security_fixes: true
@@ -23,29 +22,13 @@ branches:
       required_pull_request_reviews:
         required_approving_review_count: 1
         dismiss_stale_reviews: true
-        require_code_owner_reviews: false
       required_status_checks:
         strict: true
         contexts:
-          - "Terraform quality / Validate aws"
-          - "Terraform quality / Validate platform"
-          - "Terraform quality / Validate observability"
-          - "Terraform quality / Checkov"
+          - "Validate aws"
+          - "Validate observability"
       enforce_admins: true
       required_linear_history: true
-      restrictions: null
-  - name: homolog
-    protection:
-      required_pull_request_reviews:
-        required_approving_review_count: 1
-        dismiss_stale_reviews: true
-      required_status_checks:
-        strict: true
-        contexts:
-          - "Terraform quality / Validate aws"
-          - "Terraform quality / Validate platform"
-          - "Terraform quality / Validate observability"
-          - "Terraform quality / Checkov"
-      enforce_admins: false
-      required_linear_history: true
+      allow_force_pushes: false
+      allow_deletions: false
       restrictions: null

@@ -5,10 +5,6 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: terraform
-    directory: /platform
-    schedule:
-      interval: weekly
-  - package-ecosystem: terraform
     directory: /observability
     schedule:
       interval: weekly
