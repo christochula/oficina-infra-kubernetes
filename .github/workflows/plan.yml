@@ -20,6 +20,7 @@ env:
 
 jobs:
   plan:
+    environment: homolog
     name: Plan aws
     # Nao roda para PRs vindos de fork (nao teriam acesso aos secrets).
     if: github.event.pull_request.head.repo.full_name == github.repository

@@ -47,7 +47,7 @@ jobs:
 
       - name: Run TFLint
         run: |
-          tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl" || true
-          tflint --chdir=${{ matrix.stack }} --config="${GITHUB_WORKSPACE}/.tflint.hcl" --format=compact || true
+          tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl"
+          tflint --chdir=${{ matrix.stack }} --config="${GITHUB_WORKSPACE}/.tflint.hcl" --format=compact
         env:
           GITHUB_TOKEN: ${{ github.token }}

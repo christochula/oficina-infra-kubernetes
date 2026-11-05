@@ -84,12 +84,6 @@ variable "node_disk_size" {
   default     = 50
 }
 
-variable "application_port" {
-  description = "Porta do container da API e do Service."
-  type        = number
-  default     = 3000
-}
-
 variable "ecr_image_tag_mutability" {
   description = "Mutabilidade das tags do ECR."
   type        = string

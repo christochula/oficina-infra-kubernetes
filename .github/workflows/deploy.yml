@@ -18,9 +18,11 @@ env:
   AWS_REGION: us-east-1
   TF_VAR_aws_region: us-east-1
   TF_VAR_environment: homolog
+  TF_VAR_datadog_site: ${{ vars.DD_SITE || 'datadoghq.com' }}
 
 jobs:
   apply:
+    environment: homolog
     name: Apply infra (aws + observability)
     runs-on: ubuntu-latest
     steps:
@@ -85,6 +87,8 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
+          terraform fmt -check -recursive
+          terraform validate -no-color
           terraform apply -input=false -lock-timeout=5m -auto-approve
 
       - name: Terraform outputs (aws)
@@ -94,6 +98,9 @@ jobs:
       - name: Terraform apply (observability)
         if: steps.dd.outputs.enabled == 'true'
         working-directory: observability
+        env:
+          TF_VAR_saga_queue_names: ${{ vars.SAGA_QUEUE_NAMES_JSON || '[]' }}
+          TF_VAR_saga_dlq_names: ${{ vars.SAGA_DLQ_NAMES_JSON || '[]' }}
         run: |
           set -euo pipefail
           CLUSTER="$(terraform -chdir=../aws output -raw cluster_name)"
@@ -103,6 +110,8 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
+          terraform fmt -check -recursive
+          terraform validate -no-color
           terraform apply -input=false -lock-timeout=5m -auto-approve \
             -var "kubernetes_cluster_name=${CLUSTER}" \
             -var "api_base_url=${{ vars.API_BASE_URL || 'http://api.placeholder.local' }}" \

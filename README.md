@@ -1,5 +1,7 @@
 # oficina-infra-kubernetes
 
+> **Fase 4:** esta infraestrutura e a plataforma EKS/Datadog compartilhada por OS, Billing e Producao. Cada aplicacao mantem Dockerfile, Helm, CI/CD, filas e banco proprios em seu repositorio/state; o RDS da Fase 3 e legado e nao e compartilhado. Veja [configuracao e telemetria da Fase 4](docs/configuracao-fase4.md). As secoes historicas abaixo descrevem a topologia da Fase 3.
+
 Infraestrutura Kubernetes (Amazon EKS) e observabilidade Datadog da Oficina API, provisionada com **Terraform** e executada no **AWS Academy Learner Lab**.
 
 É um dos quatro repositórios do Tech Challenge Fase 3:
