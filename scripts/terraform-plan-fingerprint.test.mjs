@@ -1,9 +1,10 @@
 /* global structuredClone */
 import { test } from 'node:test';
+import process from 'node:process';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { fingerprintPlan, compareReviews } from './terraform-plan-fingerprint.mjs';
 const metadata = { repository: 'owner/repo', target_sha: 'a'.repeat(40), target_ref: 'feature/demo', workflow: 'infra-phase4.yml', operation: 'plan', run_id: '10', scope: 'default' };
 const plan = { format_version: '1.2', timestamp: 'first-run', resource_changes: [{ address: 'aws_secretsmanager_secret_version.runtime', type: 'aws_secretsmanager_secret_version', change: { actions: ['create'], before: null, after: { secret_string: 'private-fixture-do-not-emit', name: 'runtime' }, after_sensitive: { secret_string: true }, after_unknown: { id: true } } }], output_changes: { id: { actions: ['create'], after_unknown: true } } };
