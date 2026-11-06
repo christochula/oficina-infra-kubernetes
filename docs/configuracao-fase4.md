@@ -4,10 +4,17 @@ O cluster EKS, node group, metrics-server e Datadog Agent sao compartilhados. OS
 
 ## Configuracao pelo usuario
 
-No GitHub deste repositorio, configurar Secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` da sessao Academy. Variables:
+No GitHub deste repositorio, configurar no **Environment homolog** os Secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` da sessao Academy. O deploy ocorre exclusivamente via GitHub Actions; [procedimento de plano e aplicacao](platform-actions.md). Variables de homolog:
 
 | Nome | Valor |
 | --- | --- |
+| `EXPECTED_AWS_ACCOUNT_ID` | ID de 12 digitos da conta autorizada; o workflow compara com STS antes de criar recursos |
+| `KUBERNETES_VERSION` | Minor explicito do EKS, sem default; verificar `STANDARD_SUPPORT` na regiao (ex.: `1.35`) |
+| `CLUSTER_ROLE_ARN` | ARN da role pre-existente para o control plane EKS |
+| `NODE_ROLE_ARN` | ARN da role pre-existente dos nodes; pode diferir da role do cluster |
+| `PRINCIPAL_ARN` | Opcional; vazio deriva a role `voclabs` da conta atual |
+| `LAB_ROLE_ARN` | Opcional; fallback Terraform para cluster/nodes quando overrides estao vazios |
+| `PLATFORM_APPROVED_PLAN_RUN_ID` | ID da execucao **plan** revisada; preencher antes de solicitar apply do mesmo SHA |
 | `DATADOG_ENABLED` | `true` para instalar Agent/Cluster Agent e aplicar dashboards/monitores |
 | `DATADOG_SECRET_ID` | Default `oficina/datadog`, secret AWS JSON `{"api_key":"REPLACE","app_key":"REPLACE"}` |
 | `API_BASE_URL` | URL HTTPS do Gateway, ex. `https://REPLACE.execute-api.us-east-1.amazonaws.com` |
@@ -16,7 +23,9 @@ No GitHub deste repositorio, configurar Secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET
 | `SAGA_QUEUE_NAMES_JSON` | Array JSON dos nomes reais de filas comandos/respostas, ex. `["REPLACE-billing-commands","REPLACE-production-commands","REPLACE-os-events"]` |
 | `SAGA_DLQ_NAMES_JSON` | Array JSON dos nomes reais das DLQs |
 
-Copiar `aws/terraform.tfvars.example` e `observability/terraform.tfvars.example` para arquivos ignorados ao executar localmente. Chaves Datadog vem do ambiente `TF_VAR_datadog_api_key`, `TF_VAR_datadog_app_key` / `DD_API_KEY`, `DD_APP_KEY`, nunca de tfvars versionado. `business_services` permite ajustar DD_SERVICE; defaults `oficina-api`, `oficina-billing-service`, `oficina-production-service`.
+Configure tambem a **Repository Variable** `DEPLOY_SOURCE_REF`, padrao `feature/phase4-distributed`, para vincular tags operacionais a uma branch revisada. O workflow exige o SHA da tag igual ao HEAD dessa branch. O formulario manual exige `target_ref`/`target_sha` iguais a branch/commit do proprio disparo.
+
+`aws/terraform.tfvars.example` e `observability/terraform.tfvars.example` documentam os inputs; deploys reais sao solicitados nos Actions. Chaves Datadog vem do ambiente `TF_VAR_datadog_api_key`, `TF_VAR_datadog_app_key` / `DD_API_KEY`, `DD_APP_KEY`, nunca de tfvars versionado. Valores marcados `sensitive` ficam ocultos no texto, mas podem existir no state, por isso o backend exige criptografia e acesso restrito. `business_services` permite ajustar DD_SERVICE; defaults `oficina-api`, `oficina-billing-service`, `oficina-production-service`.
 
 State AWS: `oficina/kubernetes/terraform.tfstate`; state Datadog: `oficina/observability/terraform.tfstate`; bucket de lab `oficina-tc3-tfstate-REPLACE_ACCOUNT_ID`. States dos servicos nao devem apontar para essas keys.
 
@@ -38,6 +47,6 @@ Metricas `aws.sqs.approximate_age_of_oldest_message` e `aws.sqs.approximate_numb
 
 ## Verificacao e entrega
 
-CI exige `terraform fmt`, `init -backend=false`, `validate` e TFLint; falhas TFLint nao sao mais ignoradas. Checks a configurar como obrigatorios: `Validate aws` e `Validate observability`, mais `Plan aws` conforme o nome publicado pelo workflow de plan. Deploy valida configuracao antes de aplicar. Nenhum recurso foi aplicado por esta implementacao.
+CI exige `terraform fmt`, `init -backend=false`, `validate` e TFLint; falhas TFLint nao sao ignoradas. Os checks obrigatorios existentes sao preservados: `Validate aws`, `Validate observability` e **`Plan aws`**, que continua executando um plano AWS real nos PRs do proprio repositorio depois das validacoes offline, sem apply e sem criar/alterar o bucket de backend. Se o bucket ainda nao existir, solicite primeiro um plano explicito por tag/manual no workflow `Terraform deploy`. O job adicional `Plan controls` testa offline os mecanismos de CI/plano/aprovacao/fingerprint e nao substitui o check `Plan aws`. Deploy exige os dois Validate e Plan controls verdes no mesmo CI; a aplicacao exige ainda um plano explicito revisado e identico. Nenhum recurso foi aplicado pela validacao local.
 
 Apos usuario preencher as chaves e executar os deploys: gerar trafego de OS completo, simular falha de consumer/compensacao, consultar Saga e traces e conferir dashboard/monitores. Capturar evidencia real de logs, trace e DLQ para README/video. Os backends fornecem as filas e respectivos nomes/ARNs; copiar outputs para as Variables acima.

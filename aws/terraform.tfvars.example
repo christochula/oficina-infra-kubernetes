@@ -5,17 +5,19 @@ project_name = "oficina"
 environment  = "homolog"
 aws_region   = "us-east-1"
 
-kubernetes_version = "1.32"
+kubernetes_version = "1.35" # Exemplo; verificar STANDARD_SUPPORT no EKS antes de usar.
 instance_type      = "t3.medium"
 node_min_size      = 2
 node_desired_size  = 2
 node_max_size      = 4
 
 # AWS Academy: roles pre-existentes. Deixe vazio para derivar de account_id.
-# lab_role_arn  = "arn:aws:iam::519768589921:role/LabRole"
-# principal_arn = "arn:aws:iam::519768589921:role/voclabs"
+# lab_role_arn     = "arn:aws:iam::REPLACE_ACCOUNT_ID:role/LabRole"
+# cluster_role_arn = "arn:aws:iam::REPLACE_ACCOUNT_ID:role/REPLACE_CLUSTER_ROLE"
+# node_role_arn    = "arn:aws:iam::REPLACE_ACCOUNT_ID:role/REPLACE_NODE_ROLE"
+# principal_arn    = "arn:aws:iam::REPLACE_ACCOUNT_ID:role/voclabs"
 
 # Datadog Agent (chaves vem do Secrets Manager em runtime, nunca aqui)
-datadog_enabled = true
+datadog_enabled = false
 datadog_site    = "datadoghq.com"
 # datadog_api_key / datadog_app_key -> TF_VAR_datadog_api_key etc no CI
