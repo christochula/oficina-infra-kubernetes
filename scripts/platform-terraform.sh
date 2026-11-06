@@ -12,6 +12,7 @@ set -euo pipefail
 [[ "$OPERATION" == plan || "$OPERATION" == apply ]]
 [[ "$TF_VAR_datadog_enabled" == true || "$TF_VAR_datadog_enabled" == false ]]
 export PLAN_WORKFLOW_FILE="${PLAN_WORKFLOW_FILE:-deploy.yml}" PLAN_OPERATION="$OPERATION"
+PLAN_SCOPE=aws node scripts/terraform-plan-fingerprint.mjs --validate-environment
 
 current="$RUNNER_TEMP/platform-current"
 approved="$RUNNER_TEMP/platform-approved"
