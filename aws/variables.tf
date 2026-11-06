@@ -28,13 +28,35 @@ variable "aws_region" {
 
 # --- AWS Academy ---------------------------------------------------------------
 # O Learner Lab nao permite criar IAM role/policy/OIDC. Toda role necessaria
-# (EKS cluster, node group, add-ons) usa a LabRole pre-existente, e o acesso
-# administrativo ao cluster vai para a role voclabs do usuario do lab.
+# usa roles pre-existentes. Cluster e nodes podem usar roles diferentes;
+# acesso administrativo vai para a role voclabs do usuario do lab.
 
 variable "lab_role_arn" {
   description = "ARN da LabRole do AWS Academy usada como role do cluster e dos nodes. Vazio = deriva de account_id."
   type        = string
   default     = ""
+}
+
+variable "cluster_role_arn" {
+  description = "Role IAM pre-existente do control plane EKS. Vazio usa lab_role_arn."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.cluster_role_arn == "" || can(regex("^arn:[a-z0-9-]+:iam::[0-9]{12}:role/.+$", var.cluster_role_arn))
+    error_message = "cluster_role_arn deve ser um ARN IAM role valido ou vazio."
+  }
+}
+
+variable "node_role_arn" {
+  description = "Role IAM pre-existente dos nodes EKS. Vazio usa lab_role_arn."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.node_role_arn == "" || can(regex("^arn:[a-z0-9-]+:iam::[0-9]{12}:role/.+$", var.node_role_arn))
+    error_message = "node_role_arn deve ser um ARN IAM role valido ou vazio."
+  }
 }
 
 variable "principal_arn" {
@@ -44,13 +66,12 @@ variable "principal_arn" {
 }
 
 variable "kubernetes_version" {
-  description = "Minor do EKS."
+  description = "Minor do EKS escolhido explicitamente e verificado em STANDARD_SUPPORT antes do plano."
   type        = string
-  default     = "1.32"
 
   validation {
     condition     = can(regex("^1\\.[0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version deve ser um minor como 1.32."
+    error_message = "kubernetes_version deve ser um minor como 1.35."
   }
 }
 
@@ -84,12 +105,6 @@ variable "node_disk_size" {
   default     = 50
 }
 
-variable "application_port" {
-  description = "Porta do container da API e do Service."
-  type        = number
-  default     = 3000
-}
-
 variable "ecr_image_tag_mutability" {
   description = "Mutabilidade das tags do ECR."
   type        = string
@@ -115,12 +130,12 @@ variable "ecr_untagged_retention_days" {
 
 # --- Datadog Agent (Helm) ----------------------------------------------------
 # Chaves lidas do AWS Secrets Manager pelo pipeline e passadas como TF_VAR_*.
-# Nunca vao para tfvars nem para o state em texto plano (marcadas sensitive).
+# Nunca vao para tfvars. Sensitive oculta logs, mas o state ainda exige protecao.
 
 variable "datadog_enabled" {
   description = "Instala o Datadog Agent via Helm no cluster."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "datadog_api_key" {

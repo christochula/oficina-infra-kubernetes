@@ -14,10 +14,46 @@ resource "datadog_dashboard_json" "oficina" {
       {
         name    = "service"
         prefix  = "service"
-        default = var.service_name
+        default = "*"
       }
     ]
     widgets = [
+      {
+        definition = {
+          title       = "Saga transitions and compensations"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "sum:oficina.saga.transitions{env:$env} by {step,status}.as_count()", display_type = "bars" },
+            { q = "sum:oficina.saga.compensations{env:$env} by {step,status}.as_count()", display_type = "bars" }
+          ]
+        }
+      },
+      {
+        definition = {
+          title       = "Messages processed and failed per service/queue"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "sum:oficina.messaging.processed{env:$env} by {service,queue}.as_count()", display_type = "line" },
+            { q = "sum:oficina.messaging.failed{env:$env} by {service,queue}.as_count()", display_type = "bars" }
+          ]
+        }
+      },
+      {
+        definition = {
+          title    = "Automatic Saga pending age (seconds)"
+          type     = "timeseries"
+          requests = [{ q = "max:oficina.saga.pending_age_seconds{env:$env} by {step}", display_type = "line" }]
+        }
+      },
+      {
+        definition = {
+          title    = "SQS visible messages (requires AWS integration)"
+          type     = "timeseries"
+          requests = [{ q = "max:aws.sqs.approximate_number_of_messages_visible{env:$env} by {queuename}", display_type = "line" }]
+        }
+      },
       {
         definition = {
           type             = "note"

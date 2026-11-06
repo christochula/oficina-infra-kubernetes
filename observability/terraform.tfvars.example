@@ -3,15 +3,18 @@ service_name            = "oficina-api"
 kubernetes_cluster_name = "oficina-homolog-eks"
 kubernetes_namespace    = "oficina"
 
-# The internal ALB requires a Datadog Private Location with VPC reachability.
-api_base_url         = "http://internal-oficina-homolog-api.example.internal"
-synthetics_locations = ["pl:replace-with-private-location-id"]
+# HTTPS Gateway base, after auth deploy; public Datadog synthetic location.
+api_base_url         = "https://REPLACE.execute-api.us-east-1.amazonaws.com"
+synthetics_locations = ["aws:us-east-1"]
+datadog_api_url      = "https://api.datadoghq.com/"
+business_services   = ["oficina-api", "oficina-billing-service", "oficina-production-service"]
 
-datadog_api_url = "https://api.datadoghq.com/"
+# Fill actual names from each service Terraform output. Requires Datadog AWS/SQS integration.
+saga_queue_names = []
+saga_dlq_names   = []
+saga_pending_age_critical_seconds = 300
 
-# Account/org-global resources: enable each one in exactly one authoritative state.
-enable_aws_integration          = false
+# Enable only after custom metrics have been ingested; one authoritative state.
 manage_metric_tag_configuration = false
-
 # DD_API_KEY and DD_APP_KEY must be environment variables, never tfvars.
-notification_message = "Investigue o dashboard e acione @slack-oficina-alertas."
+notification_message = "Inspect the distributed trace and Saga history."

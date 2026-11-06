@@ -4,7 +4,8 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches-ignore: [main]
+    branches: ['**']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,6 +15,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan-controls:
+    name: Plan controls
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Test deployment gates, plan fingerprints and guarded recovery controls
+        run: node --test scripts/*.test.mjs
+      - name: Validate platform shell controls
+        run: for script in scripts/*.sh; do bash -n "$script"; done
+
   terraform:
     name: Validate ${{ matrix.stack }}
     runs-on: ubuntu-latest
@@ -47,7 +60,7 @@ jobs:
 
       - name: Run TFLint
         run: |
-          tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl" || true
-          tflint --chdir=${{ matrix.stack }} --config="${GITHUB_WORKSPACE}/.tflint.hcl" --format=compact || true
+          tflint --init --config="${GITHUB_WORKSPACE}/.tflint.hcl"
+          tflint --chdir=${{ matrix.stack }} --config="${GITHUB_WORKSPACE}/.tflint.hcl" --format=compact
         env:
           GITHUB_TOKEN: ${{ github.token }}

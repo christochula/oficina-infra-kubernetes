@@ -4,16 +4,14 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-
+permissions: { contents: read }
 concurrency:
   group: terraform-plan-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
-  TF_IN_AUTOMATION: "true"
-  TF_INPUT: "false"
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
   AWS_REGION: us-east-1
   TF_VAR_aws_region: us-east-1
   TF_VAR_environment: homolog
@@ -21,39 +19,99 @@ env:
 jobs:
   plan:
     name: Plan aws
-    # Nao roda para PRs vindos de fork (nao teriam acesso aos secrets).
+    environment: homolog
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPERATION: plan
+      TARGET_SHA: ${{ github.event.pull_request.head.sha }}
+      TARGET_REF: ${{ github.head_ref }}
+      PLAN_WORKFLOW_FILE: plan.yml
+      PLAN_REVIEW_ELIGIBLE: 'false'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (AWS Academy session keys)
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.event.pull_request.head.sha }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Test plan controls before AWS access
+        run: node --test scripts/*.test.mjs
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.0
+          terraform_wrapper: false
+      - name: Format, initialize without backend and validate both stacks
+        run: |
+          set -euo pipefail
+          for stack in aws observability; do
+            terraform -chdir="$stack" fmt -check -recursive
+            terraform -chdir="$stack" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$stack" validate -no-color
+          done
+      - uses: terraform-linters/setup-tflint@v4
+        with: { tflint_version: v0.53.0 }
+      - name: Require TFLint for both stacks before AWS access
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          tflint --init --config="$GITHUB_WORKSPACE/.tflint.hcl"
+          for stack in aws observability; do tflint --chdir="$stack" --config="$GITHUB_WORKSPACE/.tflint.hcl" --format=compact; done
+      - name: Require explicit version, account and existing IAM roles
+        env:
+          KUBERNETES_VERSION: ${{ vars.KUBERNETES_VERSION }}
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          CLUSTER_ROLE_ARN: ${{ vars.CLUSTER_ROLE_ARN }}
+          NODE_ROLE_ARN: ${{ vars.NODE_ROLE_ARN }}
+        run: bash scripts/require-platform-settings.sh
+      - name: Configure AWS Academy credentials for an actual plan only
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.16.0
-
-      - name: Resolve state backend
+      - name: Verify existing state bucket without creating or modifying it
         id: backend
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          ALLOW_STATE_BOOTSTRAP: 'false'
+        run: bash scripts/bootstrap-state-bucket.sh
+      - name: Require EKS standard support for the configured version
+        env: { KUBERNETES_VERSION: '${{ vars.KUBERNETES_VERSION }}' }
         run: |
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          echo "bucket=oficina-tc3-tfstate-${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
-
-      - name: Terraform plan (aws)
-        working-directory: aws
-        run: |
-          terraform init -input=false \
-            -backend-config="bucket=${{ steps.backend.outputs.bucket }}" \
-            -backend-config="key=oficina/kubernetes/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true" \
-            -backend-config="use_lockfile=true"
-          terraform plan -input=false -lock-timeout=5m -no-color -var 'datadog_enabled=false'
+          set -euo pipefail
+          status="$(aws eks describe-cluster-versions --cluster-versions "$KUBERNETES_VERSION" --query 'clusterVersions[0].versionStatus' --output text)"
+          [[ "$status" == STANDARD_SUPPORT ]]
+      - name: Load existing Datadog secret only when explicitly enabled
+        env:
+          DATADOG_ENABLED: ${{ vars.DATADOG_ENABLED || 'false' }}
+          DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: bash scripts/load-datadog.sh
+      - name: Generate an actual non-destructive AWS plan; never apply from PR
+        env:
+          STATE_BUCKET: ${{ steps.backend.outputs.bucket }}
+          TF_VAR_kubernetes_version: ${{ vars.KUBERNETES_VERSION }}
+          TF_VAR_cluster_role_arn: ${{ vars.CLUSTER_ROLE_ARN }}
+          TF_VAR_node_role_arn: ${{ vars.NODE_ROLE_ARN }}
+          TF_VAR_lab_role_arn: ${{ vars.LAB_ROLE_ARN }}
+          TF_VAR_principal_arn: ${{ vars.PRINCIPAL_ARN }}
+          TF_VAR_datadog_site: ${{ vars.DD_SITE || 'datadoghq.com' }}
+          TF_VAR_kubernetes_namespace: oficina-fase4
+          TF_VAR_api_base_url: ${{ vars.API_BASE_URL || 'http://api.placeholder.local' }}
+          TF_VAR_datadog_api_url: ${{ vars.DATADOG_API_URL || 'https://api.datadoghq.com/' }}
+          TF_VAR_saga_queue_names: ${{ vars.SAGA_QUEUE_NAMES_JSON || '[]' }}
+          TF_VAR_saga_dlq_names: ${{ vars.SAGA_DLQ_NAMES_JSON || '[]' }}
+        run: bash scripts/platform-terraform.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-pr-plan-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/platform-current/scope.json
+            ${{ runner.temp }}/platform-current/*-plan.txt
+            ${{ runner.temp }}/platform-current/*-review.json
+      - name: Remove ephemeral secret and binary plan material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/platform-datadog.json" "$RUNNER_TEMP"/platform-*.tfplan "$RUNNER_TEMP"/platform-*-plan.log "$RUNNER_TEMP/platform-bucket-error.txt"
