@@ -1,0 +1,96 @@
+name: Recover empty EKS nodegroup
+run-name: Recover empty oficina nodes @${{ inputs.target_sha || github.sha }}
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Branch revisada cujo HEAD passou os tres checks de CI
+        required: true
+        type: string
+      target_sha:
+        description: SHA completo de 40 caracteres aprovado no CI
+        required: true
+        type: string
+      confirmation:
+        description: Digite RECOVER_EMPTY_OFICINA_NODES para confirmar zero nodes registrados e nenhum workload ativo
+        required: true
+        type: string
+  push:
+    tags: ['phase4/platform-recover-nodes-*']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: platform-infrastructure-homolog
+  cancel-in-progress: false
+env:
+  AWS_REGION: us-east-1
+jobs:
+  recover:
+    environment: homolog
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+      TARGET_REF: ${{ inputs.target_ref || (github.ref_type == 'branch' && github.ref_name) || vars.DEPLOY_SOURCE_REF || 'feature/phase4-distributed' }}
+    steps:
+      - name: Checkout reviewed recovery controls
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Require all three exact source CI gates before AWS access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REQUIRED_DEPLOY_GATES: Validate aws,Validate observability,Plan controls
+          CI_WORKFLOW_FILE: ci.yml
+          DISPATCH_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || '' }}
+          DISPATCH_REF: ${{ github.event_name == 'workflow_dispatch' && github.ref || '' }}
+        run: node scripts/check-deploy-gates.mjs
+      - name: Checkout the exact tested recovery source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          persist-credentials: false
+      - name: Validate the fixed operational scope and explicit confirmation
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          NODE_ROLE_ARN: ${{ vars.NODE_ROLE_ARN }}
+          CONFIRM_NODE_RECOVERY: ${{ inputs.confirmation || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/phase4/platform-recover-nodes-') && 'RECOVER_EMPTY_OFICINA_NODES') || '' }}
+        run: node scripts/recover-empty-nodes.mjs --validate-request
+      - name: Configure fresh Academy session credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Select kubectl matching the fixed cluster minor
+        id: kubectl
+        run: |
+          set -euo pipefail
+          minor="$(aws eks describe-cluster --name oficina-homolog-eks --query cluster.version --output text)"
+          [[ "$minor" =~ ^1\.[0-9]+$ ]]
+          version="$(curl --fail --silent --show-error --location "https://dl.k8s.io/release/stable-${minor}.txt")"
+          [[ "$version" == "v${minor}."* && "$version" =~ ^v1\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ steps.kubectl.outputs.version }}
+      - name: Write only an isolated local kubeconfig
+        run: |
+          set -euo pipefail
+          umask 077
+          aws eks update-kubeconfig --name oficina-homolog-eks --alias oficina-homolog-eks-recovery --kubeconfig "$RUNNER_TEMP/oficina-node-recovery.kubeconfig"
+      - name: Refresh only the verified empty nodegroup and require system readiness
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          NODE_ROLE_ARN: ${{ vars.NODE_ROLE_ARN }}
+          CONFIRM_NODE_RECOVERY: ${{ inputs.confirmation || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/phase4/platform-recover-nodes-') && 'RECOVER_EMPTY_OFICINA_NODES') || '' }}
+        run: node scripts/recover-empty-nodes.mjs
+      - name: Remove the isolated local kubeconfig
+        if: always()
+        run: rm -f "$RUNNER_TEMP/oficina-node-recovery.kubeconfig"
