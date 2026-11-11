@@ -129,27 +129,13 @@ variable "ecr_untagged_retention_days" {
 }
 
 # --- Datadog Agent (Helm) ----------------------------------------------------
-# Chaves lidas do AWS Secrets Manager pelo pipeline e passadas como TF_VAR_*.
-# Nunca vao para tfvars. Sensitive oculta logs, mas o state ainda exige protecao.
+# Chaves sao copiadas pelo Actions para um Secret Kubernetes existente.
+# Terraform recebe somente o nome desse Secret, nunca os valores.
 
 variable "datadog_enabled" {
   description = "Instala o Datadog Agent via Helm no cluster."
   type        = bool
   default     = false
-}
-
-variable "datadog_api_key" {
-  description = "Datadog API key (ingestao). Vem do Secrets Manager em runtime."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "datadog_app_key" {
-  description = "Datadog APP key. Vem do Secrets Manager em runtime."
-  type        = string
-  default     = ""
-  sensitive   = true
 }
 
 variable "datadog_site" {

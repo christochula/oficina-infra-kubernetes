@@ -48,6 +48,9 @@ resource "helm_release" "datadog" {
       site        = var.datadog_site
       clusterName = local.cluster_name
       tags        = ["env:${var.environment}", "team:oficina"]
+      # Created by the Actions runtime step; values never enter a TF plan/state.
+      apiKeyExistingSecret = "datadog-credentials"
+      appKeyExistingSecret = "datadog-credentials"
 
       kubelet = {
         tlsVerify = false
@@ -82,16 +85,6 @@ resource "helm_release" "datadog" {
       }
     }
   })]
-
-  set_sensitive {
-    name  = "datadog.apiKey"
-    value = var.datadog_api_key
-  }
-
-  set_sensitive {
-    name  = "datadog.appKey"
-    value = var.datadog_app_key
-  }
 
   depends_on = [
     aws_eks_node_group.this,

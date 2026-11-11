@@ -114,15 +114,40 @@ jobs:
           set -euo pipefail
           status="$(aws eks describe-cluster-versions --cluster-versions "$KUBERNETES_VERSION" --query 'clusterVersions[0].versionStatus' --output text)"
           [[ "$status" == STANDARD_SUPPORT ]] || { echo 'Selected Kubernetes version is not in EKS STANDARD_SUPPORT.' >&2; exit 1; }
-      - name: Load Datadog credentials only when explicitly enabled
+      - name: Validate and initialize the canonical Datadog secret through Actions
+        if: vars.DATADOG_ENABLED == 'true'
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
+          DD_SITE: ${{ vars.DD_SITE || 'datadoghq.com' }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
+        run: node scripts/configure-datadog-secret.mjs
+      - name: Load Datadog provider credentials only when explicitly enabled
         env:
           DATADOG_ENABLED: ${{ vars.DATADOG_ENABLED || 'false' }}
           DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
           API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: bash scripts/load-datadog.sh
+      - name: Resolve kubectl for the existing Datadog runtime prerequisite
+        if: env.OPERATION == 'apply' && env.TF_VAR_datadog_enabled == 'true'
+        id: datadog-kubectl
+        run: |
+          set -euo pipefail
+          minor="$(aws eks describe-cluster --name oficina-homolog-eks --query cluster.version --output text)"
+          [[ "$minor" =~ ^1\.[0-9]+$ ]]
+          version="$(curl --fail --silent --show-error --location "https://dl.k8s.io/release/stable-${minor}.txt")"
+          [[ "$version" == "v${minor}."* ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-kubectl@v4
+        if: env.OPERATION == 'apply' && env.TF_VAR_datadog_enabled == 'true'
+        with: { version: '${{ steps.datadog-kubectl.outputs.version }}' }
       - name: Build a non-destructive plan and apply only an identical reviewed plan
         env:
           STATE_BUCKET: ${{ steps.backend.outputs.bucket }}
+          CLUSTER_NAME: oficina-homolog-eks
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
           TF_VAR_kubernetes_version: ${{ vars.KUBERNETES_VERSION }}
           TF_VAR_cluster_role_arn: ${{ vars.CLUSTER_ROLE_ARN }}
           TF_VAR_node_role_arn: ${{ vars.NODE_ROLE_ARN }}

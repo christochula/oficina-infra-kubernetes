@@ -46,6 +46,11 @@ if [[ "$OPERATION" == apply ]]; then
     cmp "$approved/${stack}-plan.txt" "$current/${stack}-plan.txt" || { echo 'Text plan changed; request a new reviewed plan.' >&2; exit 1; }
     node scripts/terraform-plan-fingerprint.mjs --compare "$approved/${stack}-review.json" "$current/${stack}-review.json"
   done
+  # Runtime credentials are copied only after every reviewed plan matches.
+  # Their values are outside Terraform configuration, plan and state.
+  if [[ "$TF_VAR_datadog_enabled" == true ]]; then
+    bash scripts/prepare-datadog-agent-secret.sh
+  fi
   for stack in "${stacks[@]}"; do
     terraform -chdir="$stack" apply -input=false -lock-timeout=5m -auto-approve "$RUNNER_TEMP/platform-${stack}.tfplan"
   done

@@ -49,7 +49,7 @@ O workflow exige CI completo do mesmo repositorio/branch/SHA antes de acessar a 
 
 Configure em `homolog` as credenciais temporarias AWS e as Variables explicitas `EXPECTED_AWS_ACCOUNT_ID`, `KUBERNETES_VERSION`, `CLUSTER_ROLE_ARN` e `NODE_ROLE_ARN`. `PRINCIPAL_ARN` e opcional; vazio deriva `voclabs` na conta atual. O codigo suporta fallback das roles para `lab_role_arn`; o workflow solicita overrides explicitos para o ambiente Academy com roles distintas. O minor EKS deve estar em `STANDARD_SUPPORT`, verificado pelo workflow; nao existe default legado automatico.
 
-Datadog fica desabilitado por padrao. Habilitar exige `DATADOG_ENABLED=true`, secret real e URL HTTPS publica da aplicacao. Um plano que removeria um Agent existente continua bloqueado. Secrets sensitive podem estar no state, que requer criptografia e controle de acesso, mesmo quando ocultos na exibicao do Terraform.
+Datadog fica desabilitado por padrao. Habilitar exige `DATADOG_ENABLED=true`, par API/App valido e URL HTTPS publica da aplicacao. O Actions inicializa o secret canonico com account guard e validacao oficial; o Agent usa um Secret Kubernetes existente, sem passar chaves ao Terraform. Um plano que removeria um Agent existente continua bloqueado. [Configuracao e verificacao Datadog por Actions](docs/datadog-actions.md).
 
 - [Configuracao Fase 4, variaveis e contrato de telemetria](docs/configuracao-fase4.md)
 - [Procedimento de plano, revisao e aplicacao](docs/platform-actions.md)

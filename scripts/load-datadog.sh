@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 : "${DATADOG_ENABLED:?DATADOG_ENABLED must be explicit}"
 [[ "$DATADOG_ENABLED" == true || "$DATADOG_ENABLED" == false ]]
 printf 'TF_VAR_datadog_enabled=%s\n' "$DATADOG_ENABLED" >> "$GITHUB_ENV"
@@ -11,4 +12,5 @@ api="$(jq -er '.api_key | select(type == "string" and length > 0)' "$RUNNER_TEMP
 app="$(jq -er '.app_key | select(type == "string" and length > 0)' "$RUNNER_TEMP/platform-datadog.json")"
 echo "::add-mask::$api"
 echo "::add-mask::$app"
-printf 'TF_VAR_datadog_api_key=%s\nTF_VAR_datadog_app_key=%s\nDD_API_KEY=%s\nDD_APP_KEY=%s\n' "$api" "$app" "$api" "$app" >> "$GITHUB_ENV"
+printf 'DD_API_KEY=%s\nDD_APP_KEY=%s\n' "$api" "$app" >> "$GITHUB_ENV"
+rm -f "$RUNNER_TEMP/platform-datadog.json"

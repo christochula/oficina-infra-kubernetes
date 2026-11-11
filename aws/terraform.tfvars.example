@@ -20,4 +20,4 @@ node_max_size      = 4
 # Datadog Agent (chaves vem do Secrets Manager em runtime, nunca aqui)
 datadog_enabled = false
 datadog_site    = "datadoghq.com"
-# datadog_api_key / datadog_app_key -> TF_VAR_datadog_api_key etc no CI
+# API/App keys: GitHub homolog -> Secrets Manager -> Kubernetes Secret, fora do Terraform.

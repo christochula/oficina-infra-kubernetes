@@ -1,0 +1,42 @@
+# Datadog por GitHub Actions
+
+O primeiro plano com Datadog habilitado valida o par de chaves na API oficial e inicializa somente o secret AWS `oficina/datadog`, se ainda nao houver valores. Essa inicializacao e uma escrita explicita por Actions, anterior ao plano Terraform. Credenciais existentes iguais sao preservadas; divergencia exige revisao separada, sem rotacao automatica.
+
+No Environment `homolog` deste repositorio, configurar:
+
+| Entrada | Valor ou finalidade |
+| --- | --- |
+| Secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Sessao Academy renovada |
+| Secrets `DATADOG_API_KEY`, `DATADOG_APP_KEY` | Par ativo da organizacao US1; formatos atuais `ddapp_` sao aceitos |
+| `EXPECTED_AWS_ACCOUNT_ID` | Conta Academy revisada |
+| `DATADOG_ENABLED` | `true` |
+| `DATADOG_SECRET_ID` | `oficina/datadog` |
+| `DD_SITE` | `datadoghq.com` |
+| `DATADOG_API_URL` | `https://api.datadoghq.com/` |
+| `API_BASE_URL` | Gateway HTTPS real, sem barra final |
+| `SAGA_QUEUE_NAMES_JSON`, `SAGA_DLQ_NAMES_JSON` | Nomes das filas, se a integracao AWS Datadog estiver disponivel |
+
+As Variables de Environment prevalecem sobre as do repositorio. O workflow ja passa `TF_VAR_kubernetes_namespace=oficina-fase4`; o Agent tem namespace separado `datadog`, sem renomear o namespace legado.
+
+Depois do CI completo no novo HEAD, solicitar `Terraform deploy` com `operation=plan`, `target_ref=feature/phase4-distributed` e `target_sha` completo. A alternativa por tag e `phase4/platform-plan-*`. Revisar o texto e fingerprint dos dois stacks, `aws` e `observability`: nenhum delete/replace e aceito. Configurar `PLATFORM_APPROVED_PLAN_RUN_ID` com o novo run revisado e solicitar `apply` no mesmo SHA/ref e escopo Datadog. O plano antigo com Datadog desabilitado nao pode aprovar esse apply.
+
+O apply requer o EKS base ja existente e ACTIVE. Depois de comparar texto/fingerprint de todos os stacks, o Actions copia o par canonico para `datadog/datadog-credentials` com arquivos temporarios privados e kubeconfig isolado. Helm recebe apenas `apiKeyExistingSecret`/`appKeyExistingSecret`; o provider Datadog usa variaveis de ambiente, sem chaves em `TF_VAR`, plano ou state. Nenhum JSON de segredo, state ou plano binario e publicado em artifacts.
+
+Os tres aplicativos enviam APM TCP8126 e DogStatsD UDP8125 ao IP do node; o Agent habilita ambas as portas host. No OS, configurar `DD_ENABLED=true` antes do deploy. Billing ja habilita trace/metricas no chart; Production tambem deve manter as flags explicitas. Renovar os tres Secrets AWS de `homolog` e redeployar cada aplicativo por seu workflow para recarregar as credenciais.
+
+Verificacoes de leitura apos apply:
+
+```sh
+kubectl -n datadog get daemonsets,deployments,pods
+kubectl -n datadog rollout status daemonset/datadog --timeout=5m
+kubectl -n datadog rollout status deployment/datadog-cluster-agent --timeout=5m
+kubectl get deployments -n oficina-fase4
+kubectl top nodes
+kubectl top pods -A
+```
+
+Confirmar no Datadog hosts, logs e traces dos tres services com `env:homolog`, apos gerar trafego na aplicacao. Dois nodes t3.medium atendem atualmente seis pods de aplicacao; conferir requests/limites e consumo do Agent/Cluster Agent nos comandos acima antes de gravar. Presenca de pods nao comprova ingestao externa.
+
+Graficos SQS nativos dependem da integracao AWS do Datadog e suas tags; os nomes de filas so criam monitores, nao configuram essa integracao. Para a demonstracao sem permissao cross-account, usar as metricas customizadas de mensageria/Saga emitidas pelos servicos. Percentis de distributions podem exigir uma segunda passada com `manage_metric_tag_configuration=true` depois que as metricas existirem; revisar novo plano antes do apply.
+
+Referencias oficiais: [validacao API/App](https://docs.datadoghq.com/api/latest/key-management/validate-api-and-application-keys/), [Secret existente no chart Datadog](https://github.com/DataDog/helm-charts/blob/main/charts/datadog/values.yaml).
