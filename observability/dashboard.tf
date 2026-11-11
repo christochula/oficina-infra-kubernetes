@@ -84,30 +84,23 @@ resource "datadog_dashboard_json" "oficina" {
       },
       {
         definition = {
-          title       = "Volume diário de ordens de serviço"
+          title       = "Taxa de abertura de OS (OS/s)"
           type        = "timeseries"
           show_legend = true
           requests = [{
-            q            = "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_count().rollup(sum,86400)"
-            display_type = "bars"
+            q            = "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_rate()"
+            display_type = "line"
             style = {
               palette    = "dog_classic"
               line_type  = "solid"
               line_width = "normal"
             }
           }]
-        }
-      },
-      {
-        definition = {
-          title     = "OS criadas nas últimas 24h"
-          type      = "query_value"
-          autoscale = true
-          precision = 0
-          requests = [{
-            q          = "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_count().rollup(sum,86400)"
-            aggregator = "sum"
-          }]
+          yaxis = {
+            include_zero = true
+            scale        = "linear"
+            label        = "OS/s"
+          }
         }
       },
       {

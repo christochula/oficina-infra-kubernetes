@@ -61,3 +61,18 @@ run "preserve_global_configuration_compatibility" {
     error_message = "The existing global flag must retain its five-resource behavior."
   }
 }
+
+run "creation_widget_shows_rate_without_claiming_absolute_count" {
+  command = plan
+
+  assert {
+    condition = (
+      strcontains(datadog_dashboard_json.oficina.dashboard, "Taxa de abertura de OS (OS/s)") &&
+      strcontains(datadog_dashboard_json.oficina.dashboard, "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_rate()") &&
+      !strcontains(datadog_dashboard_json.oficina.dashboard, "OS criadas nas últimas 24h") &&
+      !strcontains(datadog_dashboard_json.oficina.dashboard, "Volume diário de ordens de serviço") &&
+      !strcontains(datadog_dashboard_json.oficina.dashboard, "rollup(sum,86400)")
+    )
+    error_message = "Normalized DogStatsD rate must be labelled OS/s, not an absolute daily order count."
+  }
+}
