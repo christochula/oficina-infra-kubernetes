@@ -82,6 +82,12 @@ jobs:
           set -euo pipefail
           status="$(aws eks describe-cluster-versions --cluster-versions "$KUBERNETES_VERSION" --query 'clusterVersions[0].versionStatus' --output text)"
           [[ "$status" == STANDARD_SUPPORT ]]
+      - name: Validate reviewed add-on overrides against EKS compatibility
+        env:
+          KUBERNETES_VERSION: ${{ vars.KUBERNETES_VERSION }}
+          ADDON_VERSIONS_JSON: ${{ vars.ADDON_VERSIONS_JSON || '{}' }}
+          MANAGE_METRIC_TAG_CONFIGURATION: ${{ vars.MANAGE_METRIC_TAG_CONFIGURATION || 'false' }}
+        run: node scripts/validate-addon-versions.mjs
       - name: Load existing Datadog secret only when explicitly enabled
         env:
           DATADOG_ENABLED: ${{ vars.DATADOG_ENABLED || 'false' }}
@@ -92,6 +98,8 @@ jobs:
         env:
           STATE_BUCKET: ${{ steps.backend.outputs.bucket }}
           TF_VAR_kubernetes_version: ${{ vars.KUBERNETES_VERSION }}
+          TF_VAR_addon_versions: ${{ vars.ADDON_VERSIONS_JSON || '{}' }}
+          TF_VAR_manage_metric_tag_configuration: ${{ vars.MANAGE_METRIC_TAG_CONFIGURATION || 'false' }}
           TF_VAR_cluster_role_arn: ${{ vars.CLUSTER_ROLE_ARN }}
           TF_VAR_node_role_arn: ${{ vars.NODE_ROLE_ARN }}
           TF_VAR_lab_role_arn: ${{ vars.LAB_ROLE_ARN }}

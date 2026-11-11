@@ -49,9 +49,24 @@ resource "datadog_dashboard_json" "oficina" {
       },
       {
         definition = {
-          title    = "SQS visible messages (requires AWS integration)"
-          type     = "timeseries"
-          requests = [{ q = "max:aws.sqs.approximate_number_of_messages_visible{env:$env} by {queuename}", display_type = "line" }]
+          title       = "SQS visible messages: inbox and DLQ (custom gauges)"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "max:oficina.messaging.queue.visible{env:$env,role:inbox} by {queue}", display_type = "line" },
+            { q = "max:oficina.messaging.queue.visible{env:$env,role:dlq} by {queue}", display_type = "line" }
+          ]
+        }
+      },
+      {
+        definition = {
+          title       = "SQS inflight and delayed messages (custom gauges)"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "max:oficina.messaging.queue.inflight{env:$env} by {queue,role}", display_type = "line" },
+            { q = "max:oficina.messaging.queue.delayed{env:$env} by {queue,role}", display_type = "line" }
+          ]
         }
       },
       {

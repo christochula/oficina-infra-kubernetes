@@ -75,7 +75,7 @@ resource "aws_eks_node_group" "this" {
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "vpc-cni"
-  addon_version = data.aws_eks_addon_version.vpc_cni.version
+  addon_version = coalesce(lookup(var.addon_versions, "vpc-cni", null), data.aws_eks_addon_version.vpc_cni.version)
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
@@ -84,7 +84,7 @@ resource "aws_eks_addon" "vpc_cni" {
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "kube-proxy"
-  addon_version = data.aws_eks_addon_version.kube_proxy.version
+  addon_version = coalesce(lookup(var.addon_versions, "kube-proxy", null), data.aws_eks_addon_version.kube_proxy.version)
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
@@ -95,7 +95,7 @@ resource "aws_eks_addon" "kube_proxy" {
 resource "aws_eks_addon" "coredns" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "coredns"
-  addon_version = data.aws_eks_addon_version.coredns.version
+  addon_version = coalesce(lookup(var.addon_versions, "coredns", null), data.aws_eks_addon_version.coredns.version)
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"

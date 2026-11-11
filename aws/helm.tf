@@ -37,6 +37,7 @@ resource "helm_release" "datadog" {
   create_namespace = true
   repository       = "https://helm.datadoghq.com"
   chart            = "datadog"
+  version          = "3.270.0"
 
   atomic          = true
   cleanup_on_fail = true

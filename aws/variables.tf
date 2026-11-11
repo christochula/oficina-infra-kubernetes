@@ -26,6 +26,20 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "addon_versions" {
+  description = "Versoes EKS add-on revisadas. Chaves omitidas usam a versao compativel mais recente; Actions valida overrides na API EKS."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for name, version in var.addon_versions :
+      contains(["coredns", "kube-proxy", "vpc-cni"], name) && can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+-eksbuild\\.[0-9]+$", version))
+    ])
+    error_message = "addon_versions aceita somente coredns/kube-proxy/vpc-cni com versoes vX.Y.Z-eksbuild.N revisadas."
+  }
+}
+
 # --- AWS Academy ---------------------------------------------------------------
 # O Learner Lab nao permite criar IAM role/policy/OIDC. Toda role necessaria
 # usa roles pre-existentes. Cluster e nodes podem usar roles diferentes;

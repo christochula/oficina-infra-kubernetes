@@ -15,8 +15,12 @@ No Environment `homolog` deste repositorio, configurar:
 | `DATADOG_API_URL` | `https://api.datadoghq.com/` |
 | `API_BASE_URL` | Gateway HTTPS real, sem barra final |
 | `SAGA_QUEUE_NAMES_JSON`, `SAGA_DLQ_NAMES_JSON` | Nomes das filas, se a integracao AWS Datadog estiver disponivel |
+| `ADDON_VERSIONS_JSON` | Mapa opcional de versoes revisadas para `coredns`, `kube-proxy`, `vpc-cni`; validar compatibilidade com o minor EKS |
+| `MANAGE_METRIC_TAG_CONFIGURATION` | `false` inicialmente; `true` somente em nova passada revisada depois que as distributions existirem |
 
 As Variables de Environment prevalecem sobre as do repositorio. O workflow ja passa `TF_VAR_kubernetes_namespace=oficina-fase4`; o Agent tem namespace separado `datadog`, sem renomear o namespace legado.
+
+O chart Agent esta fixado em `3.270.0`. Antes de habilitar Datadog numa plataforma existente, preencher `ADDON_VERSIONS_JSON` com as versoes instaladas observadas para manter a instalacao de telemetria separada de upgrades de rede/DNS. Actions verifica cada versao solicitada em `DescribeAddonVersions` para o EKS selecionado; entradas omitidas usam o fallback compativel mais recente do provider.
 
 Depois do CI completo no novo HEAD, solicitar `Terraform deploy` com `operation=plan`, `target_ref=feature/phase4-distributed` e `target_sha` completo. A alternativa por tag e `phase4/platform-plan-*`. Revisar o texto e fingerprint dos dois stacks, `aws` e `observability`: nenhum delete/replace e aceito. Configurar `PLATFORM_APPROVED_PLAN_RUN_ID` com o novo run revisado e solicitar `apply` no mesmo SHA/ref e escopo Datadog. O plano antigo com Datadog desabilitado nao pode aprovar esse apply.
 
@@ -37,6 +41,6 @@ kubectl top pods -A
 
 Confirmar no Datadog hosts, logs e traces dos tres services com `env:homolog`, apos gerar trafego na aplicacao. Dois nodes t3.medium atendem atualmente seis pods de aplicacao; conferir requests/limites e consumo do Agent/Cluster Agent nos comandos acima antes de gravar. Presenca de pods nao comprova ingestao externa.
 
-Graficos SQS nativos dependem da integracao AWS do Datadog e suas tags; os nomes de filas so criam monitores, nao configuram essa integracao. Para a demonstracao sem permissao cross-account, usar as metricas customizadas de mensageria/Saga emitidas pelos servicos. Percentis de distributions podem exigir uma segunda passada com `manage_metric_tag_configuration=true` depois que as metricas existirem; revisar novo plano antes do apply.
+O dashboard usa gauges customizadas `oficina.messaging.queue.visible/inflight/delayed`, coletadas pelo OS a cada 30s para inbox e DLQ com tags `queue`/`role`. As consultas usam `max` por fila para nao somar amostras de replicas. Monitores SQS nativos opcionais ainda dependem da integracao AWS Datadog; os nomes de filas nao configuram essa integracao. Percentis de distributions podem exigir segunda passada com `MANAGE_METRIC_TAG_CONFIGURATION=true` depois que as metricas existirem; revisar novo plano antes do apply.
 
 Referencias oficiais: [validacao API/App](https://docs.datadoghq.com/api/latest/key-management/validate-api-and-application-keys/), [Secret existente no chart Datadog](https://github.com/DataDog/helm-charts/blob/main/charts/datadog/values.yaml).
