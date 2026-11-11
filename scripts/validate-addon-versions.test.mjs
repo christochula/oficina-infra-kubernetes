@@ -25,7 +25,7 @@ test('rejects installed-looking version not compatible with the selected EKS min
   await assert.rejects(validateAddonVersions({ env, runAws: async () => JSON.stringify({ addons: [{ addonName: 'coredns', addonVersions: [{ addonVersion: pins.coredns, compatibilities: [{ clusterVersion: '1.34' }] }] }] }) }), /PINNED_ADDON_VERSION_NOT_COMPATIBLE/);
 });
 test('refuses invalid flags or version map before any AWS request', async () => {
-  for (const overrides of [{ GITHUB_ACTIONS: 'false' }, { MANAGE_METRIC_TAG_CONFIGURATION: 'yes' }, { ADDON_VERSIONS_JSON: '{"bad":"v1.0.0-eksbuild.1"}' }]) {
+  for (const overrides of [{ GITHUB_ACTIONS: 'false' }, { MANAGE_METRIC_TAG_CONFIGURATION: 'yes' }, { ENABLE_DISTRIBUTION_PERCENTILES: 'yes' }, { ADDON_VERSIONS_JSON: '{"bad":"v1.0.0-eksbuild.1"}' }]) {
     let calls = 0;
     await assert.rejects(validateAddonVersions({ env: { ...env, ...overrides }, runAws: async () => { calls++; } }));
     assert.equal(calls, 0);

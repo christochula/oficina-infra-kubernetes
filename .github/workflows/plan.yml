@@ -87,6 +87,7 @@ jobs:
           KUBERNETES_VERSION: ${{ vars.KUBERNETES_VERSION }}
           ADDON_VERSIONS_JSON: ${{ vars.ADDON_VERSIONS_JSON || '{}' }}
           MANAGE_METRIC_TAG_CONFIGURATION: ${{ vars.MANAGE_METRIC_TAG_CONFIGURATION || 'false' }}
+          ENABLE_DISTRIBUTION_PERCENTILES: ${{ vars.ENABLE_DISTRIBUTION_PERCENTILES || 'false' }}
         run: node scripts/validate-addon-versions.mjs
       - name: Load existing Datadog secret only when explicitly enabled
         env:
@@ -100,6 +101,7 @@ jobs:
           TF_VAR_kubernetes_version: ${{ vars.KUBERNETES_VERSION }}
           TF_VAR_addon_versions: ${{ vars.ADDON_VERSIONS_JSON || '{}' }}
           TF_VAR_manage_metric_tag_configuration: ${{ vars.MANAGE_METRIC_TAG_CONFIGURATION || 'false' }}
+          TF_VAR_enable_distribution_percentiles: ${{ vars.ENABLE_DISTRIBUTION_PERCENTILES || 'false' }}
           TF_VAR_cluster_role_arn: ${{ vars.CLUSTER_ROLE_ARN }}
           TF_VAR_node_role_arn: ${{ vars.NODE_ROLE_ARN }}
           TF_VAR_lab_role_arn: ${{ vars.LAB_ROLE_ARN }}

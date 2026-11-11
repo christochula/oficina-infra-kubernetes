@@ -1,5 +1,5 @@
 resource "datadog_metric_tag_configuration" "api_request_duration" {
-  count               = var.manage_metric_tag_configuration ? 1 : 0
+  count               = (var.manage_metric_tag_configuration || var.enable_distribution_percentiles) ? 1 : 0
   metric_name         = var.api_request_duration_metric
   metric_type         = "distribution"
   tags                = ["env", "service", "version", "method", "status_code"]
@@ -15,7 +15,7 @@ resource "datadog_metric_tag_configuration" "service_order_created" {
 }
 
 resource "datadog_metric_tag_configuration" "service_order_status_duration" {
-  count               = var.manage_metric_tag_configuration ? 1 : 0
+  count               = (var.manage_metric_tag_configuration || var.enable_distribution_percentiles) ? 1 : 0
   metric_name         = var.service_order_status_duration_metric
   metric_type         = "distribution"
   tags                = ["env", "service", "version", "status"]

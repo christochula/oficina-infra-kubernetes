@@ -16,6 +16,12 @@ variable "manage_metric_tag_configuration" {
   default     = false
 }
 
+variable "enable_distribution_percentiles" {
+  description = "Habilita percentis somente nas duas distributions ja emitidas; nao cria configuracao das metricas count."
+  type        = bool
+  default     = false
+}
+
 variable "kubernetes_cluster_name" {
   description = "Tag kube_cluster_name emitida pelo Datadog Agent."
   type        = string

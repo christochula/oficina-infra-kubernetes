@@ -16,7 +16,8 @@ No Environment `homolog` deste repositorio, configurar:
 | `API_BASE_URL` | Gateway HTTPS real, sem barra final |
 | `SAGA_QUEUE_NAMES_JSON`, `SAGA_DLQ_NAMES_JSON` | Nomes das filas, se a integracao AWS Datadog estiver disponivel |
 | `ADDON_VERSIONS_JSON` | Mapa opcional de versoes revisadas para `coredns`, `kube-proxy`, `vpc-cni`; validar compatibilidade com o minor EKS |
-| `MANAGE_METRIC_TAG_CONFIGURATION` | `false` inicialmente; `true` somente em nova passada revisada depois que as distributions existirem |
+| `MANAGE_METRIC_TAG_CONFIGURATION` | `false`; flag global para cinco metricas, incluindo counts que precisam existir antes de habilitar |
+| `ENABLE_DISTRIBUTION_PERCENTILES` | `false` inicialmente; `true` habilita apenas os percentis das duas distributions ja existentes |
 
 As Variables de Environment prevalecem sobre as do repositorio. O workflow ja passa `TF_VAR_kubernetes_namespace=oficina-fase4`; o Agent tem namespace separado `datadog`, sem renomear o namespace legado.
 
@@ -41,6 +42,6 @@ kubectl top pods -A
 
 Confirmar no Datadog hosts, logs e traces dos tres services com `env:homolog`, apos gerar trafego na aplicacao. Dois nodes t3.medium atendem atualmente seis pods de aplicacao; conferir requests/limites e consumo do Agent/Cluster Agent nos comandos acima antes de gravar. Presenca de pods nao comprova ingestao externa.
 
-O dashboard usa gauges customizadas `oficina.messaging.queue.visible/inflight/delayed`, coletadas pelo OS a cada 30s para inbox e DLQ com tags `queue`/`role`. As consultas usam `max` por fila para nao somar amostras de replicas. Monitores SQS nativos opcionais ainda dependem da integracao AWS Datadog; os nomes de filas nao configuram essa integracao. Percentis de distributions podem exigir segunda passada com `MANAGE_METRIC_TAG_CONFIGURATION=true` depois que as metricas existirem; revisar novo plano antes do apply.
+O dashboard usa gauges customizadas `oficina.messaging.queue.visible/inflight/delayed`, coletadas pelo OS a cada 30s para inbox e DLQ com tags `queue`/`role`. As consultas usam `max` por fila para nao somar amostras de replicas. Monitores SQS nativos opcionais ainda dependem da integracao AWS Datadog; os nomes de filas nao configuram essa integracao. Depois da ingestao de `oficina.api.request.duration_ms` e `oficina.service_orders.status_duration_ms`, manter `MANAGE_METRIC_TAG_CONFIGURATION=false` e configurar `ENABLE_DISTRIBUTION_PERCENTILES=true` para habilitar somente essas duas distributions. Revisar novo plano antes do apply; nao habilitar a flag global enquanto as tres metricas count ainda nao existirem.
 
 Referencias oficiais: [validacao API/App](https://docs.datadoghq.com/api/latest/key-management/validate-api-and-application-keys/), [Secret existente no chart Datadog](https://github.com/DataDog/helm-charts/blob/main/charts/datadog/values.yaml).

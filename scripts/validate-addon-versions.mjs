@@ -15,7 +15,7 @@ export function parseAddonVersions(text = '{}') {
 export async function validateAddonVersions({ env, runAws }) {
   if (env?.GITHUB_ACTIONS !== 'true' || typeof runAws !== 'function') fail('ACTIONS_ONLY');
   if (!/^1\.\d+$/.test(env.KUBERNETES_VERSION ?? '') || env.AWS_REGION !== 'us-east-1') fail('INVALID_ADDON_PLATFORM_SCOPE');
-  if (!['true', 'false'].includes(env.MANAGE_METRIC_TAG_CONFIGURATION || 'false')) fail('INVALID_METRIC_TAG_CONFIGURATION_FLAG');
+  for (const name of ['MANAGE_METRIC_TAG_CONFIGURATION', 'ENABLE_DISTRIBUTION_PERCENTILES']) if (!['true', 'false'].includes(env[name] || 'false')) fail('INVALID_METRIC_TAG_CONFIGURATION_FLAG');
   const versions = parseAddonVersions(env.ADDON_VERSIONS_JSON || '{}');
   for (const [name, version] of Object.entries(versions)) {
     let result;

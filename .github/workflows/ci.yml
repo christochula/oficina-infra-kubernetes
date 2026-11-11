@@ -52,6 +52,9 @@ jobs:
 
       - name: Validate configuration
         run: terraform -chdir=${{ matrix.stack }} validate
+      - name: Verify distribution-only configuration with a mocked Datadog provider
+        if: matrix.stack == 'observability'
+        run: terraform -chdir=observability test -no-color
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
