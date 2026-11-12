@@ -36,6 +36,18 @@ esac
       TF_FIXTURE_JSON: shellPath(json), TF_FIXTURE_TEXT: shellPath(text), TF_ACTION_LOG: shellPath(log),
     };
     const execute = overrides => spawnSync(bash, ['scripts/platform-terraform.sh'], { cwd: repo, env: { ...env, ...overrides }, encoding: 'utf8' });
+    // A new AWS account may install the Agent without claiming existing external resources.
+    let agentOnly = execute({ TF_VAR_datadog_enabled: 'true', DATADOG_OBSERVABILITY_MODE: 'agent-only' });
+    assert.equal(agentOnly.status, 0, agentOnly.stderr);
+    assert.equal((await readFile(log, 'utf8')).includes('-chdir=observability'), false);
+    assert.equal(JSON.parse(await readFile(join(temp, 'platform-current', 'scope.json'), 'utf8')).observability_mode, 'agent-only');
+    await cp(join(temp, 'platform-current'), join(temp, 'platform-approved'), { recursive: true });
+    await writeFile(log, '');
+    agentOnly = execute({ OPERATION: 'apply', GITHUB_RUN_ID: '11', TF_VAR_datadog_enabled: 'true', DATADOG_OBSERVABILITY_MODE: 'manage' });
+    assert.notEqual(agentOnly.status, 0, 'Changing external ownership scope requires a new plan review');
+    assert.equal((await readFile(log, 'utf8')).includes(' apply '), false);
+    await writeFile(log, '');
+    for (const name of ['observability-plan.txt', 'observability-review.json']) await rm(join(temp, 'platform-current', name), { force: true });
     let result = execute({});
     assert.equal(result.status, 0, result.stderr);
     assert.equal((await readFile(log, 'utf8')).includes(' apply '), false);

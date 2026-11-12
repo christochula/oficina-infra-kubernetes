@@ -8,12 +8,14 @@ Use o Environment `homolog` com as tres credenciais temporarias AWS Academy e as
 
 `DEPLOY_SOURCE_REF` e uma Repository Variable usada no evento de tag, com padrao `feature/phase4-distributed`. Credenciais e demais configuracoes de runtime ficam em `homolog`. Datadog permanece desabilitado por padrao; habilitar exige `DATADOG_ENABLED=true`, Secret AWS real contendo `api_key` e `app_key`, e a URL HTTPS real do Gateway para Synthetic. Ausencia de chave nao e convertida silenciosamente em uma solicitacao para remover um Agent ja existente: qualquer plano com delete/replace e bloqueado.
 
+Em outra conta AWS usando a mesma organizacao Datadog, definir `DATADOG_OBSERVABILITY_MODE=agent-only`. Isso instala o Agent no cluster novo sem abrir outro state para os recursos externos existentes. `manage` permanece o padrao para o proprietario canonico; somente esse modo planeja/aplica observability. O modo entra em `scope.json` e deve ser identico entre plan/apply. Agent-only nao atualiza o Synthetic antigo. Backend AWS novo nao recebe state da conta antiga; o filtro de subnets usa IDs fisicos de AZ suportados, independentes das letras de zona da conta.
+
 ## Solicitar o plano
 
 1. Publique a branch revisada e aguarde os checks `Validate aws`, `Validate observability` e `Plan controls` de uma unica execucao `ci.yml` bem-sucedida para o SHA atual. `Plan aws` continua sendo o plano real de PR, em workflow separado; ele nao entra no gate do proprio plano, evitando uma dependencia circular.
 2. Execute `Terraform deploy` na mesma branch com `operation=plan`, `target_ref=<branch>` e `target_sha=<SHA completo>`. Se o GitHub ainda nao disponibilizar o formulario porque o workflow esta apenas na feature, uma tag `phase4/platform-plan-<identificador>` apontando para o HEAD da `DEPLOY_SOURCE_REF` dispara o mesmo plano. O push dessa tag inicia trabalho AWS.
-3. Apos o gate CI, o workflow confere a conta e pode criar o bucket `oficina-tc3-tfstate-<conta>`, com AES256, versionamento e bloqueio de acesso publico. Essa preparacao do backend e a unica criacao permitida na operacao plan. Bucket existente com KMS conserva sua criptografia; apply exige backend existente e protegido. Terraform usa lockfile S3 e as keys `oficina/kubernetes/terraform.tfstate` e `oficina/observability/terraform.tfstate`.
-4. Revise o artefato `platform-plan-<SHA>-<run-id>` e os custos/recursos. Contem `aws-plan.txt`, `aws-review.json` e `scope.json`; se Datadog estiver habilitado, inclui os equivalentes de observability. O texto vem de `terraform show -no-color` e preserva as marcacoes de valores sensitive. Binarios de plano, state e JSON bruto do Terraform nunca sao artifacts.
+3. Apos o gate CI, o workflow confere a conta e pode criar o bucket `oficina-tc3-tfstate-<conta>`, com AES256, versionamento e bloqueio de acesso publico. Com Datadog desabilitado, essa preparacao do backend e a unica criacao permitida na operacao plan. Com Datadog habilitado, o helper tambem pode inicializar seu secret canonico com o par externo validado, como documentado em [Datadog Actions](datadog-actions.md). Bucket existente com KMS conserva sua criptografia; apply exige backend existente e protegido. Terraform usa lockfile S3 e as keys `oficina/kubernetes/terraform.tfstate` e `oficina/observability/terraform.tfstate`; esta ultima nao e aberta no modo agent-only.
+4. Revise o artefato `platform-plan-<SHA>-<run-id>` e os custos/recursos. Contem `aws-plan.txt`, `aws-review.json` e `scope.json`; se Datadog estiver habilitado no modo `manage`, inclui os equivalentes de observability. O texto vem de `terraform show -no-color` e preserva as marcacoes de valores sensitive. Binarios de plano, state e JSON bruto do Terraform nunca sao artifacts.
 
 Nao sao criados EKS, nodes ou releases Helm na operacao plan. Remocoes ou substituicoes de recursos fazem o workflow falhar antes da publicacao de um plano aprovavel.
 
@@ -34,6 +36,7 @@ node --test scripts/*.test.mjs
 terraform -chdir=aws fmt -check -recursive
 terraform -chdir=aws init -backend=false -input=false -lockfile=readonly
 terraform -chdir=aws validate
+terraform -chdir=aws test
 terraform -chdir=observability fmt -check -recursive
 terraform -chdir=observability init -backend=false -input=false -lockfile=readonly
 terraform -chdir=observability validate

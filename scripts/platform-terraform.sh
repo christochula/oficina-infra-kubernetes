@@ -11,6 +11,9 @@ set -euo pipefail
 : "${TF_VAR_datadog_enabled:?DATADOG_ENABLED must be explicit}"
 [[ "$OPERATION" == plan || "$OPERATION" == apply ]]
 [[ "$TF_VAR_datadog_enabled" == true || "$TF_VAR_datadog_enabled" == false ]]
+observability_mode="${DATADOG_OBSERVABILITY_MODE:-manage}"
+[[ "$observability_mode" == manage || "$observability_mode" == agent-only ]] || { echo 'DATADOG_OBSERVABILITY_MODE must be manage or agent-only.' >&2; exit 1; }
+export DATADOG_OBSERVABILITY_MODE="$observability_mode"
 export PLAN_WORKFLOW_FILE="${PLAN_WORKFLOW_FILE:-deploy.yml}" PLAN_OPERATION="$OPERATION"
 PLAN_SCOPE=aws node scripts/terraform-plan-fingerprint.mjs --validate-environment
 
@@ -18,8 +21,9 @@ current="$RUNNER_TEMP/platform-current"
 approved="$RUNNER_TEMP/platform-approved"
 mkdir -p "$current"
 stacks=(aws)
-if [[ "$TF_VAR_datadog_enabled" == true ]]; then stacks+=(observability); fi
-node --input-type=module -e 'process.stdout.write(JSON.stringify({schema_version:1,datadog_enabled:process.env.TF_VAR_datadog_enabled==="true"})+"\n")' > "$current/scope.json"
+if [[ "$TF_VAR_datadog_enabled" == true && "$observability_mode" == manage ]]; then stacks+=(observability); fi
+# Agent-only never initializes a second state for the existing Datadog organization.
+node --input-type=module -e 'process.stdout.write(JSON.stringify({schema_version:2,datadog_enabled:process.env.TF_VAR_datadog_enabled==="true",observability_mode:process.env.DATADOG_OBSERVABILITY_MODE})+"\n")' > "$current/scope.json"
 
 for stack in "${stacks[@]}"; do
   if [[ "$stack" == aws ]]; then key=oficina/kubernetes/terraform.tfstate; else key=oficina/observability/terraform.tfstate; fi

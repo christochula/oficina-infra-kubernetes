@@ -1,5 +1,7 @@
 # Datadog por GitHub Actions
 
+Para uma conta AWS nova na mesma organizacao Datadog, usar explicitamente `DATADOG_OBSERVABILITY_MODE=agent-only`. O Agent e o secret AWS sao configurados normalmente, mas o stack `observability` nao e inicializado, planejado ou aplicado: dashboards, monitores e Synthetics continuam no state canonico existente. Reconciliar o endpoint do Synthetic pelo proprietario desse state; agent-only nao muda a URL monitorada. Nao duplicar os recursos em um state vazio da conta nova. `manage` e o padrao compativel com ambientes existentes e exige ownership revisado; mudar o modo exige novo plano aprovado.
+
 O primeiro plano com Datadog habilitado valida o par de chaves na API oficial e inicializa somente o secret AWS `oficina/datadog`, se ainda nao houver valores. Essa inicializacao e uma escrita explicita por Actions, anterior ao plano Terraform. Credenciais existentes iguais sao preservadas; divergencia exige revisao separada, sem rotacao automatica.
 
 No Environment `homolog` deste repositorio, configurar:
@@ -10,6 +12,7 @@ No Environment `homolog` deste repositorio, configurar:
 | Secrets `DATADOG_API_KEY`, `DATADOG_APP_KEY` | Par ativo da organizacao US1; formatos atuais `ddapp_` sao aceitos |
 | `EXPECTED_AWS_ACCOUNT_ID` | Conta Academy revisada |
 | `DATADOG_ENABLED` | `true` |
+| `DATADOG_OBSERVABILITY_MODE` | `agent-only` em nova conta com Datadog existente; `manage` apenas para o proprietario canonico revisado |
 | `DATADOG_SECRET_ID` | `oficina/datadog` |
 | `DD_SITE` | `datadoghq.com` |
 | `DATADOG_API_URL` | `https://api.datadoghq.com/` |

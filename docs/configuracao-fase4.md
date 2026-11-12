@@ -15,7 +15,8 @@ No GitHub deste repositorio, configurar no **Environment homolog** os Secrets `A
 | `PRINCIPAL_ARN` | Opcional; vazio deriva a role `voclabs` da conta atual |
 | `LAB_ROLE_ARN` | Opcional; fallback Terraform para cluster/nodes quando overrides estao vazios |
 | `PLATFORM_APPROVED_PLAN_RUN_ID` | ID da execucao **plan** revisada; preencher antes de solicitar apply do mesmo SHA |
-| `DATADOG_ENABLED` | `true` para instalar Agent/Cluster Agent e aplicar dashboards/monitores |
+| `DATADOG_ENABLED` | `true` para instalar Agent/Cluster Agent; ownership de dashboards/monitores depende do modo abaixo |
+| `DATADOG_OBSERVABILITY_MODE` | `agent-only` para AWS nova com organizacao existente, sem novo state externo; `manage` para o proprietario canonico revisado |
 | `DATADOG_SECRET_ID` | Default `oficina/datadog`, secret AWS JSON `{"api_key":"REPLACE","app_key":"REPLACE"}` |
 | `API_BASE_URL` | URL HTTPS do Gateway, ex. `https://REPLACE.execute-api.us-east-1.amazonaws.com` |
 | `DD_SITE` | Site Datadog, default `datadoghq.com` |
@@ -25,7 +26,7 @@ No GitHub deste repositorio, configurar no **Environment homolog** os Secrets `A
 
 Configure tambem a **Repository Variable** `DEPLOY_SOURCE_REF`, padrao `feature/phase4-distributed`, para vincular tags operacionais a uma branch revisada. O workflow exige o SHA da tag igual ao HEAD dessa branch. O formulario manual exige `target_ref`/`target_sha` iguais a branch/commit do proprio disparo.
 
-`aws/terraform.tfvars.example` e `observability/terraform.tfvars.example` documentam os inputs; deploys reais sao solicitados nos Actions. Chaves Datadog vem do ambiente `TF_VAR_datadog_api_key`, `TF_VAR_datadog_app_key` / `DD_API_KEY`, `DD_APP_KEY`, nunca de tfvars versionado. Valores marcados `sensitive` ficam ocultos no texto, mas podem existir no state, por isso o backend exige criptografia e acesso restrito. `business_services` permite ajustar DD_SERVICE; defaults `oficina-api`, `oficina-billing-service`, `oficina-production-service`.
+`aws/terraform.tfvars.example` e `observability/terraform.tfvars.example` documentam os inputs; deploys reais sao solicitados nos Actions. Chaves Datadog sao carregadas do secret canonico para `DD_API_KEY` e `DD_APP_KEY` e para Secret Kubernetes, nunca para `TF_VAR`/tfvars/plano/state. Outros valores marcados `sensitive` podem existir no state, por isso o backend exige criptografia e acesso restrito. `business_services` permite ajustar DD_SERVICE; defaults `oficina-api`, `oficina-billing-service`, `oficina-production-service`.
 
 State AWS: `oficina/kubernetes/terraform.tfstate`; state Datadog: `oficina/observability/terraform.tfstate`; bucket de lab `oficina-tc3-tfstate-REPLACE_ACCOUNT_ID`. States dos servicos nao devem apontar para essas keys.
 

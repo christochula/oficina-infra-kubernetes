@@ -19,7 +19,7 @@ output "vpc_cidr_block" {
 }
 
 output "subnet_ids" {
-  description = "Subnets usadas pelo EKS (default VPC, sem a AZ us-east-1e)."
+  description = "Subnets da VPC default em AZs fisicas suportadas pelo EKS."
   value       = local.eks_subnet_ids
 }
 

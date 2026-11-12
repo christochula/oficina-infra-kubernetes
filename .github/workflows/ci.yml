@@ -52,6 +52,9 @@ jobs:
 
       - name: Validate configuration
         run: terraform -chdir=${{ matrix.stack }} validate
+      - name: Verify subnet portability with mocked AWS data
+        if: matrix.stack == 'aws'
+        run: terraform -chdir=aws test -no-color
       - name: Verify distribution-only configuration with a mocked Datadog provider
         if: matrix.stack == 'observability'
         run: terraform -chdir=observability test -no-color

@@ -17,15 +17,17 @@ data "aws_subnets" "default" {
   }
 }
 
-# EKS nao suporta a AZ us-east-1e. Filtra qualquer subnet nela.
+# EKS restringe IDs fisicos de AZ, nao letras que podem mudar entre contas.
+# https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html
 data "aws_subnet" "each" {
   for_each = toset(data.aws_subnets.default.ids)
   id       = each.value
 }
 
 locals {
+  eks_disallowed_az_ids = ["use1-az3", "usw1-az2", "cac1-az3"]
   eks_subnet_ids = [
     for s in data.aws_subnet.each : s.id
-    if s.availability_zone != "${var.aws_region}e"
+    if !contains(local.eks_disallowed_az_ids, s.availability_zone_id)
   ]
 }
