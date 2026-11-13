@@ -1,109 +1,219 @@
 name: Terraform deploy
+run-name: Platform ${{ inputs.operation || (startsWith(github.ref_name, 'phase4/platform-apply-') && 'apply' || 'plan') }} @${{ inputs.target_sha || github.sha }}
 
 on:
   push:
-    branches: [main]
+    tags: ['phase4/platform-plan-*', 'phase4/platform-apply-*']
   workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Branch revisada que contem o SHA aprovado no CI
+        required: true
+        type: string
+      target_sha:
+        description: SHA completo de 40 caracteres, igual ao HEAD da branch
+        required: true
+        type: string
+      operation:
+        description: Plan primeiro; apply exige PLATFORM_APPROVED_PLAN_RUN_ID revisado
+        required: true
+        default: plan
+        type: choice
+        options: [plan, apply]
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: terraform-deploy-main
+  group: platform-infrastructure-homolog
   cancel-in-progress: false
 
 env:
-  TF_IN_AUTOMATION: "true"
-  TF_INPUT: "false"
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
   AWS_REGION: us-east-1
   TF_VAR_aws_region: us-east-1
   TF_VAR_environment: homolog
+  DATADOG_OBSERVABILITY_MODE: ${{ vars.DATADOG_OBSERVABILITY_MODE || 'manage' }}
 
 jobs:
-  apply:
-    name: Apply infra (aws + observability)
+  platform:
+    environment: homolog
     runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+      TARGET_REF: ${{ inputs.target_ref || (github.ref_type == 'branch' && github.ref_name) || vars.DEPLOY_SOURCE_REF || 'feature/phase4-distributed' }}
+      OPERATION: ${{ inputs.operation || (startsWith(github.ref_name, 'phase4/platform-apply-') && 'apply' || 'plan') }}
     steps:
-      - name: Checkout
+      - name: Checkout reviewed workflow controls
         uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (AWS Academy session keys)
+        with: { ref: '${{ github.workflow_sha }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Require the exact complete CI before AWS access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REQUIRED_DEPLOY_GATES: Validate aws,Validate observability,Plan controls
+          CI_WORKFLOW_FILE: ci.yml
+          DISPATCH_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || '' }}
+          DISPATCH_REF: ${{ github.event_name == 'workflow_dispatch' && github.ref || '' }}
+        run: node scripts/check-deploy-gates.mjs
+      - name: Verify approved plan before any AWS access
+        if: env.OPERATION == 'apply'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APPROVED_PLAN_RUN_ID: ${{ vars.PLATFORM_APPROVED_PLAN_RUN_ID }}
+          PLAN_WORKFLOW_NAME: Terraform deploy
+          PLAN_WORKFLOW_FILE: deploy.yml
+          PLAN_TITLE_PREFIX: Platform
+          PLAN_TAG_PREFIX: phase4/platform-plan-
+          PLAN_ARTIFACT_PREFIX: platform-plan
+        run: node scripts/check-approved-plan.mjs
+      - name: Download only reviewed text and fingerprint metadata
+        if: env.OPERATION == 'apply'
+        uses: actions/download-artifact@v4
+        with:
+          name: platform-plan-${{ env.TARGET_SHA }}-${{ vars.PLATFORM_APPROVED_PLAN_RUN_ID }}
+          run-id: ${{ vars.PLATFORM_APPROVED_PLAN_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/platform-approved
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+        with: { ref: '${{ env.TARGET_SHA }}' }
+      - name: Require explicit platform settings
+        env:
+          KUBERNETES_VERSION: ${{ vars.KUBERNETES_VERSION }}
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          CLUSTER_ROLE_ARN: ${{ vars.CLUSTER_ROLE_ARN }}
+          NODE_ROLE_ARN: ${{ vars.NODE_ROLE_ARN }}
+        run: bash scripts/require-platform-settings.sh
+      - name: Configure AWS Academy session credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Verify expected AWS account before resource access
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_AWS_ACCOUNT_ID:-}" =~ ^[0-9]{12}$ ]] || { echo 'Configure EXPECTED_AWS_ACCOUNT_ID before AWS resource access.' >&2; exit 1; }
+          actual_account="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "$actual_account" == "$EXPECTED_AWS_ACCOUNT_ID" ]] || { echo 'AWS credentials belong to a different account.' >&2; exit 1; }
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.16.0
-
-      - name: Ensure Terraform state bucket
+          terraform_wrapper: false
+      - name: Bootstrap or verify protected state bucket
         id: backend
-        run: |
-          set -euo pipefail
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          BUCKET="oficina-tc3-tfstate-${ACCOUNT_ID}"
-          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-            aws s3api create-bucket --bucket "$BUCKET" --region "${AWS_REGION}"
-            aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
-            aws s3api put-public-access-block --bucket "$BUCKET" \
-              --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-          fi
-          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
-
-      - name: Load Datadog keys from Secrets Manager
-        id: dd
-        run: |
-          set -euo pipefail
-          if [ "${{ vars.DATADOG_ENABLED }}" != "true" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          SECRET_ID="${{ vars.DATADOG_SECRET_ID || 'oficina/datadog' }}"
-          JSON="$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" --query SecretString --output text)"
-          API="$(jq -er '.api_key' <<<"$JSON")"
-          APP="$(jq -er '.app_key' <<<"$JSON")"
-          echo "::add-mask::$API"; echo "::add-mask::$APP"
-          {
-            echo "TF_VAR_datadog_api_key=$API"
-            echo "TF_VAR_datadog_app_key=$APP"
-            echo "DD_API_KEY=$API"
-            echo "DD_APP_KEY=$APP"
-          } >> "$GITHUB_ENV"
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
-      - name: Terraform apply (aws)
-        working-directory: aws
         env:
-          TF_VAR_datadog_enabled: ${{ steps.dd.outputs.enabled }}
-        run: |
-          terraform init -input=false \
-            -backend-config="bucket=${{ steps.backend.outputs.bucket }}" \
-            -backend-config="key=oficina/kubernetes/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true" \
-            -backend-config="use_lockfile=true"
-          terraform apply -input=false -lock-timeout=5m -auto-approve
-
-      - name: Terraform outputs (aws)
-        working-directory: aws
-        run: terraform output
-
-      - name: Terraform apply (observability)
-        if: steps.dd.outputs.enabled == 'true'
-        working-directory: observability
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          ALLOW_STATE_BOOTSTRAP: ${{ env.OPERATION == 'plan' && 'true' || 'false' }}
+        run: bash scripts/bootstrap-state-bucket.sh
+      - name: Verify the explicitly selected EKS version has standard support
+        env:
+          KUBERNETES_VERSION: ${{ vars.KUBERNETES_VERSION }}
         run: |
           set -euo pipefail
-          CLUSTER="$(terraform -chdir=../aws output -raw cluster_name)"
-          terraform init -input=false \
-            -backend-config="bucket=${{ steps.backend.outputs.bucket }}" \
-            -backend-config="key=oficina/observability/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true" \
-            -backend-config="use_lockfile=true"
-          terraform apply -input=false -lock-timeout=5m -auto-approve \
-            -var "kubernetes_cluster_name=${CLUSTER}" \
-            -var "api_base_url=${{ vars.API_BASE_URL || 'http://api.placeholder.local' }}" \
-            -var "datadog_api_url=${{ vars.DATADOG_API_URL || 'https://api.datadoghq.com/' }}"
+          status="$(aws eks describe-cluster-versions --cluster-versions "$KUBERNETES_VERSION" --query 'clusterVersions[0].versionStatus' --output text)"
+          [[ "$status" == STANDARD_SUPPORT ]] || { echo 'Selected Kubernetes version is not in EKS STANDARD_SUPPORT.' >&2; exit 1; }
+      - name: Validate reviewed add-on overrides against EKS compatibility
+        env:
+          KUBERNETES_VERSION: ${{ vars.KUBERNETES_VERSION }}
+          ADDON_VERSIONS_JSON: ${{ vars.ADDON_VERSIONS_JSON || '{}' }}
+          MANAGE_METRIC_TAG_CONFIGURATION: ${{ vars.MANAGE_METRIC_TAG_CONFIGURATION || 'false' }}
+          ENABLE_DISTRIBUTION_PERCENTILES: ${{ vars.ENABLE_DISTRIBUTION_PERCENTILES || 'false' }}
+        run: node scripts/validate-addon-versions.mjs
+      - name: Validate and initialize the canonical Datadog secret through Actions
+        if: vars.DATADOG_ENABLED == 'true'
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
+          DD_SITE: ${{ vars.DD_SITE || 'datadoghq.com' }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
+        run: node scripts/configure-datadog-secret.mjs
+      - name: Load Datadog provider credentials only when explicitly enabled
+        env:
+          DATADOG_ENABLED: ${{ vars.DATADOG_ENABLED || 'false' }}
+          DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: bash scripts/load-datadog.sh
+      - name: Resolve kubectl for the existing Datadog runtime prerequisite
+        if: env.OPERATION == 'apply' && env.TF_VAR_datadog_enabled == 'true'
+        id: datadog-kubectl
+        run: |
+          set -euo pipefail
+          minor="$(aws eks describe-cluster --name oficina-homolog-eks --query cluster.version --output text)"
+          [[ "$minor" =~ ^1\.[0-9]+$ ]]
+          version="$(curl --fail --silent --show-error --location "https://dl.k8s.io/release/stable-${minor}.txt")"
+          [[ "$version" == "v${minor}."* ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-kubectl@v4
+        if: env.OPERATION == 'apply' && env.TF_VAR_datadog_enabled == 'true'
+        with: { version: '${{ steps.datadog-kubectl.outputs.version }}' }
+      - name: Build a non-destructive plan and apply only an identical reviewed plan
+        env:
+          STATE_BUCKET: ${{ steps.backend.outputs.bucket }}
+          CLUSTER_NAME: oficina-homolog-eks
+          EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+          DATADOG_SECRET_ID: ${{ vars.DATADOG_SECRET_ID }}
+          TF_VAR_kubernetes_version: ${{ vars.KUBERNETES_VERSION }}
+          TF_VAR_addon_versions: ${{ vars.ADDON_VERSIONS_JSON || '{}' }}
+          TF_VAR_manage_metric_tag_configuration: ${{ vars.MANAGE_METRIC_TAG_CONFIGURATION || 'false' }}
+          TF_VAR_enable_distribution_percentiles: ${{ vars.ENABLE_DISTRIBUTION_PERCENTILES || 'false' }}
+          TF_VAR_cluster_role_arn: ${{ vars.CLUSTER_ROLE_ARN }}
+          TF_VAR_node_role_arn: ${{ vars.NODE_ROLE_ARN }}
+          TF_VAR_lab_role_arn: ${{ vars.LAB_ROLE_ARN }}
+          TF_VAR_principal_arn: ${{ vars.PRINCIPAL_ARN }}
+          TF_VAR_datadog_site: ${{ vars.DD_SITE || 'datadoghq.com' }}
+          TF_VAR_kubernetes_namespace: oficina-fase4
+          TF_VAR_api_base_url: ${{ vars.API_BASE_URL || 'http://api.placeholder.local' }}
+          TF_VAR_datadog_api_url: ${{ vars.DATADOG_API_URL || 'https://api.datadoghq.com/' }}
+          TF_VAR_saga_queue_names: ${{ vars.SAGA_QUEUE_NAMES_JSON || '[]' }}
+          TF_VAR_saga_dlq_names: ${{ vars.SAGA_DLQ_NAMES_JSON || '[]' }}
+        run: bash scripts/platform-terraform.sh
+      - name: Publish redacted text and public fingerprint metadata only
+        if: env.OPERATION == 'plan'
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-plan-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/platform-current/scope.json
+            ${{ runner.temp }}/platform-current/*-plan.txt
+            ${{ runner.temp }}/platform-current/*-review.json
+      - name: Resolve a kubectl patch matching the applied EKS minor
+        if: env.OPERATION == 'apply'
+        id: kubectl
+        run: |
+          set -euo pipefail
+          cluster="$(terraform -chdir=aws output -raw cluster_name)"
+          minor="$(aws eks describe-cluster --name "$cluster" --query cluster.version --output text)"
+          [[ "$minor" =~ ^1\.[0-9]+$ ]]
+          version="$(curl --fail --silent --show-error --location "https://dl.k8s.io/release/stable-${minor}.txt")"
+          [[ "$version" == "v${minor}."* ]]
+          printf 'version=%s\ncluster=%s\n' "$version" "$cluster" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-kubectl@v4
+        if: env.OPERATION == 'apply'
+        with: { version: '${{ steps.kubectl.outputs.version }}' }
+      - name: Verify applied cluster and nodes
+        if: env.OPERATION == 'apply'
+        env:
+          CLUSTER_NAME: ${{ steps.kubectl.outputs.cluster }}
+        run: |
+          set -euo pipefail
+          aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+          kubectl wait --for=condition=Ready node --all --timeout=5m
+          kubectl get nodes -o wide
+          printf '## Platform applied\n\nSHA: `%s`\n\nCluster: `%s`\n' "$TARGET_SHA" "$CLUSTER_NAME" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove ephemeral secret and binary plan material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/platform-datadog.json" "$RUNNER_TEMP"/platform-*.tfplan "$RUNNER_TEMP"/platform-*-plan.log "$RUNNER_TEMP/platform-bucket-error.txt"

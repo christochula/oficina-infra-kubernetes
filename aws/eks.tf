@@ -1,12 +1,12 @@
 # EKS "cru" (sem terraform-aws-modules/eks) porque o modulo faz lookups de IAM
 # (iam:GetRole em voclabs) e cria KMS/roles bloqueados no AWS Academy.
-# Padrao: role do cluster e dos nodes = LabRole; admin do cluster = voclabs.
+# Roles separadas podem ser configuradas no Academy; fallback LabRole.
 
 resource "aws_eks_cluster" "this" {
   name    = local.cluster_name
   version = var.kubernetes_version
 
-  role_arn = local.lab_role_arn
+  role_arn = local.cluster_role_arn
 
   access_config {
     authentication_mode = "API"
@@ -44,7 +44,7 @@ resource "aws_eks_access_policy_association" "admin" {
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${local.name}-ng"
-  node_role_arn   = local.lab_role_arn
+  node_role_arn   = local.node_role_arn
   subnet_ids      = local.eks_subnet_ids
 
   ami_type       = "AL2023_x86_64_STANDARD"
@@ -75,7 +75,7 @@ resource "aws_eks_node_group" "this" {
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "vpc-cni"
-  addon_version = data.aws_eks_addon_version.vpc_cni.version
+  addon_version = coalesce(lookup(var.addon_versions, "vpc-cni", null), data.aws_eks_addon_version.vpc_cni.version)
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
@@ -84,7 +84,7 @@ resource "aws_eks_addon" "vpc_cni" {
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "kube-proxy"
-  addon_version = data.aws_eks_addon_version.kube_proxy.version
+  addon_version = coalesce(lookup(var.addon_versions, "kube-proxy", null), data.aws_eks_addon_version.kube_proxy.version)
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
@@ -95,7 +95,7 @@ resource "aws_eks_addon" "kube_proxy" {
 resource "aws_eks_addon" "coredns" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "coredns"
-  addon_version = data.aws_eks_addon_version.coredns.version
+  addon_version = coalesce(lookup(var.addon_versions, "coredns", null), data.aws_eks_addon_version.coredns.version)
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"

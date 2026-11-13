@@ -4,8 +4,10 @@ locals {
 
   account_id = data.aws_caller_identity.current.account_id
 
-  lab_role_arn  = var.lab_role_arn != "" ? var.lab_role_arn : "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/LabRole"
-  principal_arn = var.principal_arn != "" ? var.principal_arn : "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/voclabs"
+  lab_role_arn     = var.lab_role_arn != "" ? var.lab_role_arn : "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/LabRole"
+  cluster_role_arn = var.cluster_role_arn != "" ? var.cluster_role_arn : local.lab_role_arn
+  node_role_arn    = var.node_role_arn != "" ? var.node_role_arn : local.lab_role_arn
+  principal_arn    = var.principal_arn != "" ? var.principal_arn : "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:role/voclabs"
 
   common_tags = merge({
     Project     = var.project_name

@@ -1,6 +1,7 @@
 # Copy to backend.hcl and replace placeholders. Never commit backend.hcl.
 bucket       = "replace-with-terraform-state-bucket"
-key          = "oficina/homolog/observability.tfstate"
+# Mesmo caminho dos Actions. Reconciliar ownership Datadog antes de usar outro bucket.
+key          = "oficina/observability/terraform.tfstate"
 region       = "us-east-1"
 encrypt      = true
 use_lockfile = true

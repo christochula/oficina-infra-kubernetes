@@ -14,10 +14,61 @@ resource "datadog_dashboard_json" "oficina" {
       {
         name    = "service"
         prefix  = "service"
-        default = var.service_name
+        default = "*"
       }
     ]
     widgets = [
+      {
+        definition = {
+          title       = "Saga transitions and compensations"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "sum:oficina.saga.transitions{env:$env} by {step,status}.as_count()", display_type = "bars" },
+            { q = "sum:oficina.saga.compensations{env:$env} by {step,status}.as_count()", display_type = "bars" }
+          ]
+        }
+      },
+      {
+        definition = {
+          title       = "Messages processed and failed per service/queue"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "sum:oficina.messaging.processed{env:$env} by {service,queue}.as_count()", display_type = "line" },
+            { q = "sum:oficina.messaging.failed{env:$env} by {service,queue}.as_count()", display_type = "bars" }
+          ]
+        }
+      },
+      {
+        definition = {
+          title    = "Automatic Saga pending age (seconds)"
+          type     = "timeseries"
+          requests = [{ q = "max:oficina.saga.pending_age_seconds{env:$env} by {step}", display_type = "line" }]
+        }
+      },
+      {
+        definition = {
+          title       = "SQS visible messages: inbox and DLQ (custom gauges)"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "max:oficina.messaging.queue.visible{env:$env,role:inbox} by {queue}", display_type = "line" },
+            { q = "max:oficina.messaging.queue.visible{env:$env,role:dlq} by {queue}", display_type = "line" }
+          ]
+        }
+      },
+      {
+        definition = {
+          title       = "SQS inflight and delayed messages (custom gauges)"
+          type        = "timeseries"
+          show_legend = true
+          requests = [
+            { q = "max:oficina.messaging.queue.inflight{env:$env} by {queue,role}", display_type = "line" },
+            { q = "max:oficina.messaging.queue.delayed{env:$env} by {queue,role}", display_type = "line" }
+          ]
+        }
+      },
       {
         definition = {
           type             = "note"
@@ -33,30 +84,23 @@ resource "datadog_dashboard_json" "oficina" {
       },
       {
         definition = {
-          title       = "Volume diário de ordens de serviço"
+          title       = "Taxa de abertura de OS (OS/s)"
           type        = "timeseries"
           show_legend = true
           requests = [{
-            q            = "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_count().rollup(sum,86400)"
-            display_type = "bars"
+            q            = "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_rate()"
+            display_type = "line"
             style = {
               palette    = "dog_classic"
               line_type  = "solid"
               line_width = "normal"
             }
           }]
-        }
-      },
-      {
-        definition = {
-          title     = "OS criadas nas últimas 24h"
-          type      = "query_value"
-          autoscale = true
-          precision = 0
-          requests = [{
-            q          = "sum:${var.service_order_created_metric}{env:$env,service:$service}.as_count().rollup(sum,86400)"
-            aggregator = "sum"
-          }]
+          yaxis = {
+            include_zero = true
+            scale        = "linear"
+            label        = "OS/s"
+          }
         }
       },
       {
